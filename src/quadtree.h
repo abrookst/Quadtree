@@ -1,7 +1,6 @@
 #ifndef QUADTREE_H
 #define QUADTREE_H
 
-#include <vector>
 #include <memory>
 
 // 2D bounding rectangle
@@ -29,46 +28,51 @@ struct Bounds
                  y + half_height < other.y - other.half_height);
     }
 
+    bool contains_bounds(const Bounds& other) const
+    {
+        return get_min_x() <= other.get_min_x() && get_max_x() >= other.get_max_x() &&
+               get_min_y() <= other.get_min_y() && get_max_y() >= other.get_max_y();
+    }
+
     float get_min_x() const { return x - half_width; }
     float get_max_x() const { return x + half_width; }
     float get_min_y() const { return y - half_height; }
     float get_max_y() const { return y + half_height; }
 };
 
-// Point data structure
-struct Point
+enum class FillState
 {
-    float x, y;
-    int id;
-
-    Point() : x(0), y(0), id(-1) {}
-    Point(float x, float y, int id = -1) : x(x), y(y), id(id) {}
+    Empty,
+    Solid,
+    Mixed,
 };
 
 // Forward declaration
 class QuadtreeNode;
 
-// Quadtree container
+// Terrain occupancy quadtree
 class Quadtree
 {
 public:
-    Quadtree(const Bounds& bounds, int max_points = 4);
+    Quadtree(const Bounds& bounds, int max_depth = 8, bool initial_filled = false);
     ~Quadtree();
 
-    // Insert a point into the quadtree
-    bool insert(const Point& point);
+    // Set entire tree to solid/empty
+    void set_all(bool filled);
 
-    // Query all points within a region
-    void query(const Bounds& region, std::vector<Point>& results) const;
+    // Fill/clear a rectangular region
+    void set_region(const Bounds& region, bool filled);
 
-    // Query all points and return them
-    void get_all_points(std::vector<Point>& results) const;
+    // Query if a single point is inside solid terrain
+    bool is_filled(float px, float py) const;
+
+    // Query whether a region is entirely empty/solid, or mixed
+    FillState query_region(const Bounds& region) const;
 
     // Clear the tree
     void clear();
 
     // Get statistics
-    int get_point_count() const;
     int get_node_count() const;
     int get_depth() const;
 
@@ -77,7 +81,8 @@ public:
 
 private:
     std::unique_ptr<QuadtreeNode> root_;
-    int max_points_per_node_;
+    int max_depth_;
+    bool initial_filled_;
 };
 
 // Internal node structure (used for visualization)
@@ -86,12 +91,11 @@ class QuadtreeNode
     friend class Quadtree;
 
 public:
-    QuadtreeNode(const Bounds& bounds, int max_points);
+    QuadtreeNode(const Bounds& bounds, int depth, int max_depth, FillState state);
 
     const Bounds& get_bounds() const { return bounds_; }
     bool is_leaf() const { return children_[0] == nullptr; }
-    int get_point_count() const { return points_.size(); }
-    const std::vector<Point>& get_points() const { return points_; }
+    FillState get_state() const { return state_; }
     QuadtreeNode* get_child(int index) const 
     { 
         if (index >= 0 && index < 4) return children_[index].get();
@@ -99,17 +103,21 @@ public:
     }
 
 private:
-    bool insert(const Point& point);
     void subdivide();
-    void query(const Bounds& region, std::vector<Point>& results) const;
-    int get_point_count_recursive() const;
+    void set_all(FillState state);
+    void set_region(const Bounds& region, FillState state);
+    bool is_filled(float px, float py) const;
+    FillState query_region(const Bounds& region) const;
     int get_node_count_recursive() const;
     int get_depth_recursive() const;
+    void try_collapse();
+    int child_index_for_point(float px, float py) const;
 
     Bounds bounds_;
-    std::vector<Point> points_;
     std::unique_ptr<QuadtreeNode> children_[4];  // NW, NE, SW, SE
-    int max_points_;
+    int depth_;
+    int max_depth_;
+    FillState state_;
 };
 
 #endif // QUADTREE_H

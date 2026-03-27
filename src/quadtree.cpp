@@ -1,180 +1,231 @@
 #include "quadtree.h"
-#include <algorithm>
 
-// QuadtreeNode implementation
-QuadtreeNode::QuadtreeNode(const Bounds& bounds, int max_points)
-    : bounds_(bounds), max_points_(max_points)
+#include <algorithm>
+#include <cassert>
+
+static FillState filled_to_state(bool filled)
 {
-    for (int i = 0; i < 4; ++i)
-        children_[i] = nullptr;
+    return filled ? FillState::Solid : FillState::Empty;
+}
+
+QuadtreeNode::QuadtreeNode(const Bounds& bounds, int depth, int max_depth, FillState state)
+    : bounds_(bounds)
+    , depth_(depth)
+    , max_depth_(std::max(0, max_depth))
+    , state_(state)
+{
+    for (auto& child : children_) child.reset();
 }
 
 void QuadtreeNode::subdivide()
 {
-    float half_w = bounds_.half_width / 2.0f;
-    float half_h = bounds_.half_height / 2.0f;
-    float x = bounds_.x;
-    float y = bounds_.y;
+    if (!is_leaf()) return;
 
-    // NW (top-left)
-    children_[0] = std::make_unique<QuadtreeNode>(
-        Bounds(x - half_w, y + half_h, half_w * 2.0f, half_h * 2.0f), max_points_);
-    
-    // NE (top-right)
-    children_[1] = std::make_unique<QuadtreeNode>(
-        Bounds(x + half_w, y + half_h, half_w * 2.0f, half_h * 2.0f), max_points_);
-    
-    // SW (bottom-left)
-    children_[2] = std::make_unique<QuadtreeNode>(
-        Bounds(x - half_w, y - half_h, half_w * 2.0f, half_h * 2.0f), max_points_);
-    
-    // SE (bottom-right)
-    children_[3] = std::make_unique<QuadtreeNode>(
-        Bounds(x + half_w, y - half_h, half_w * 2.0f, half_h * 2.0f), max_points_);
+    const float hw = bounds_.half_width * 0.5f;
+    const float hh = bounds_.half_height * 0.5f;
+    const float x = bounds_.x;
+    const float y = bounds_.y;
 
-    // Move existing points to children
-    for (const auto& point : points_)
-    {
-        for (int i = 0; i < 4; ++i)
-        {
-            if (children_[i]->bounds_.contains(point.x, point.y))
-            {
-                children_[i]->insert(point);
-                break;
-            }
-        }
-    }
-    points_.clear();
+    const int child_depth = depth_ + 1;
+    const FillState child_state = (state_ == FillState::Solid) ? FillState::Solid : FillState::Empty;
+
+    // NW, NE, SW, SE
+    children_[0] = std::make_unique<QuadtreeNode>(Bounds(x - hw, y + hh, hw, hh), child_depth, max_depth_, child_state);
+    children_[1] = std::make_unique<QuadtreeNode>(Bounds(x + hw, y + hh, hw, hh), child_depth, max_depth_, child_state);
+    children_[2] = std::make_unique<QuadtreeNode>(Bounds(x - hw, y - hh, hw, hh), child_depth, max_depth_, child_state);
+    children_[3] = std::make_unique<QuadtreeNode>(Bounds(x + hw, y - hh, hw, hh), child_depth, max_depth_, child_state);
+
+    state_ = FillState::Mixed;
 }
 
-bool QuadtreeNode::insert(const Point& point)
+void QuadtreeNode::set_all(FillState state)
 {
-    // Check if point is within bounds
-    if (!bounds_.contains(point.x, point.y))
-        return false;
+    state_ = state;
+    for (auto& child : children_) child.reset();
+}
 
-    // If this is a leaf node and has space, add the point
+void QuadtreeNode::set_region(const Bounds& region, FillState state)
+{
+    if (!bounds_.intersects(region)) return;
+
+    if (region.contains_bounds(bounds_) || depth_ >= max_depth_)
+    {
+        set_all(state);
+        return;
+    }
+
     if (is_leaf())
     {
-        if (points_.size() < static_cast<size_t>(max_points_))
-        {
-            points_.push_back(point);
-            return true;
-        }
-        else
-        {
-            // Need to subdivide
-            subdivide();
-        }
+        if (state_ != FillState::Mixed && state_ == state) return;
+        subdivide();
     }
 
-    // Try to insert into children
-    for (int i = 0; i < 4; ++i)
+    for (auto& child : children_)
     {
-        if (children_[i]->insert(point))
-            return true;
+        child->set_region(region, state);
     }
 
-    return false;
+    try_collapse();
 }
 
-void QuadtreeNode::query(const Bounds& region, std::vector<Point>& results) const
+int QuadtreeNode::child_index_for_point(float px, float py) const
 {
-    // If this region doesn't intersect with our bounds, return
+    const bool east = px >= bounds_.x;
+    const bool north = py >= bounds_.y;
+
+    // NW, NE, SW, SE
+    if (!east && north) return 0;
+    if (east && north) return 1;
+    if (!east && !north) return 2;
+    return 3;
+}
+
+bool QuadtreeNode::is_filled(float px, float py) const
+{
+    if (!bounds_.contains(px, py)) return false;
+
+    if (is_leaf())
+    {
+        return state_ == FillState::Solid;
+    }
+
+    const int index = child_index_for_point(px, py);
+    assert(index >= 0 && index < 4);
+    return children_[index]->is_filled(px, py);
+}
+
+FillState QuadtreeNode::query_region(const Bounds& region) const
+{
     if (!bounds_.intersects(region))
-        return;
+    {
+        // No overlap: doesn't contribute to the queried region.
+        return FillState::Empty;
+    }
 
-    // If we're a leaf, check all points
+    if (region.contains_bounds(bounds_))
+    {
+        return state_;
+    }
+
     if (is_leaf())
     {
-        for (const auto& point : points_)
-        {
-            if (region.contains(point.x, point.y))
-                results.push_back(point);
-        }
-        return;
+        return state_;
     }
 
-    // Otherwise, query children
-    for (int i = 0; i < 4; ++i)
-    {
-        if (children_[i])
-            children_[i]->query(region, results);
-    }
-}
+    bool any_solid = false;
+    bool any_empty = false;
+    bool any_touched = false;
 
-int QuadtreeNode::get_point_count_recursive() const
-{
-    int count = points_.size();
-    for (int i = 0; i < 4; ++i)
+    for (const auto& child : children_)
     {
-        if (children_[i])
-            count += children_[i]->get_point_count_recursive();
+        if (!child->bounds_.intersects(region)) continue;
+        any_touched = true;
+
+        const FillState child_state = child->query_region(region);
+        if (child_state == FillState::Mixed) return FillState::Mixed;
+
+        if (child_state == FillState::Solid) any_solid = true;
+        if (child_state == FillState::Empty) any_empty = true;
+        if (any_solid && any_empty) return FillState::Mixed;
     }
-    return count;
+
+    if (!any_touched) return FillState::Empty;
+    return any_solid ? FillState::Solid : FillState::Empty;
 }
 
 int QuadtreeNode::get_node_count_recursive() const
 {
     int count = 1;
-    for (int i = 0; i < 4; ++i)
+    if (!is_leaf())
     {
-        if (children_[i])
-            count += children_[i]->get_node_count_recursive();
+        for (const auto& child : children_)
+        {
+            count += child->get_node_count_recursive();
+        }
     }
     return count;
 }
 
 int QuadtreeNode::get_depth_recursive() const
 {
-    if (is_leaf())
-        return 1;
+    if (is_leaf()) return 1;
 
-    int max_depth = 0;
-    for (int i = 0; i < 4; ++i)
+    int deepest_child = 0;
+    for (const auto& child : children_)
     {
-        if (children_[i])
-            max_depth = std::max(max_depth, children_[i]->get_depth_recursive());
+        deepest_child = std::max(deepest_child, child->get_depth_recursive());
     }
-    return max_depth + 1;
+    return deepest_child + 1;
 }
 
-// Quadtree implementation
-Quadtree::Quadtree(const Bounds& bounds, int max_points)
-    : max_points_per_node_(max_points)
+void QuadtreeNode::try_collapse()
 {
-    root_ = std::make_unique<QuadtreeNode>(bounds, max_points);
+    if (is_leaf()) return;
+
+    FillState first_state = FillState::Mixed;
+    for (const auto& child : children_)
+    {
+        if (!child->is_leaf())
+        {
+            state_ = FillState::Mixed;
+            return;
+        }
+
+        const FillState child_state = child->state_;
+        if (child_state == FillState::Mixed)
+        {
+            state_ = FillState::Mixed;
+            return;
+        }
+
+        if (first_state == FillState::Mixed)
+        {
+            first_state = child_state;
+        }
+        else if (child_state != first_state)
+        {
+            state_ = FillState::Mixed;
+            return;
+        }
+    }
+
+    state_ = first_state;
+    for (auto& child : children_) child.reset();
+}
+
+Quadtree::Quadtree(const Bounds& bounds, int max_depth, bool initial_filled)
+    : max_depth_(std::max(0, max_depth))
+    , initial_filled_(initial_filled)
+{
+    root_ = std::make_unique<QuadtreeNode>(bounds, 0, max_depth_, filled_to_state(initial_filled_));
 }
 
 Quadtree::~Quadtree() = default;
 
-bool Quadtree::insert(const Point& point)
+void Quadtree::set_all(bool filled)
 {
-    return root_->insert(point);
+    root_->set_all(filled_to_state(filled));
 }
 
-void Quadtree::query(const Bounds& region, std::vector<Point>& results) const
+void Quadtree::set_region(const Bounds& region, bool filled)
 {
-    results.clear();
-    root_->query(region, results);
+    root_->set_region(region, filled_to_state(filled));
 }
 
-void Quadtree::get_all_points(std::vector<Point>& results) const
+bool Quadtree::is_filled(float px, float py) const
 {
-    results.clear();
-    Bounds all_bounds = root_->get_bounds();
-    root_->query(all_bounds, results);
+    return root_->is_filled(px, py);
+}
+
+FillState Quadtree::query_region(const Bounds& region) const
+{
+    return root_->query_region(region);
 }
 
 void Quadtree::clear()
 {
     Bounds bounds = root_->get_bounds();
-    root_ = std::make_unique<QuadtreeNode>(bounds, max_points_per_node_);
-}
-
-int Quadtree::get_point_count() const
-{
-    return root_->get_point_count_recursive();
+    root_ = std::make_unique<QuadtreeNode>(bounds, 0, max_depth_, filled_to_state(initial_filled_));
 }
 
 int Quadtree::get_node_count() const
