@@ -40,7 +40,7 @@ static std::vector<std::string> split_ws(const std::string& s)
     return out;
 }
 
-static void draw_quadtree_leaf_cells_bw(const Quadtree* terrain, bool show_quadtree_overlay)
+static void draw_quadtree_leaf_cells(const Quadtree* terrain, bool show_quadtree_overlay, ImU32 solid_color)
 {
     if (!terrain) return;
     const QuadtreeNode* root = terrain->get_root();
@@ -80,7 +80,6 @@ static void draw_quadtree_leaf_cells_bw(const Quadtree* terrain, bool show_quadt
     };
 
     ImDrawList* dl = ImGui::GetBackgroundDrawList(vp);
-    const ImU32 black = IM_COL32(0, 0, 0, 255);
     const ImU32 outline = IM_COL32(255, 0, 0, 255);
 
     // Iterative stack to avoid recursion, but must be dynamic
@@ -111,7 +110,7 @@ static void draw_quadtree_leaf_cells_bw(const Quadtree* terrain, bool show_quadt
         const FillState s = node->get_state();
         if (s == FillState::Solid)
         {
-            dl->AddRectFilled(pmin, pmax, black);
+            dl->AddRectFilled(pmin, pmax, solid_color);
         }
 
         if (show_quadtree_overlay)
@@ -264,7 +263,20 @@ void app_run(AppContext& app)
             std::cout << "[COMMAND] Processing: " << command << std::endl;
 
             const auto args = split_ws(command);
-            if (!args.empty() && args[0] == "terrain_load")
+            if (!args.empty() && (args[0] == "quit" || args[0] == "exit"))
+            {
+                std::cout << "[RUN] Quit requested" << std::endl;
+                running = false;
+            }
+            else if (!args.empty() && args[0] == "help")
+            {
+                std::cout << "[HELP] Available commands:" << std::endl;
+                std::cout << "  help                      - Show this help" << std::endl;
+                std::cout << "  quit | exit               - Quit the application" << std::endl;
+                std::cout << "  terrain_load <file>       - Load a bitmap terrain file" << std::endl;
+                std::cout << "                              (uses GUI Max Depth)" << std::endl;
+            }
+            else if (!args.empty() && args[0] == "terrain_load")
             {
                 const std::string file = (args.size() >= 2) ? args[1] : "default.bitmap";
 
@@ -324,13 +336,18 @@ void app_run(AppContext& app)
         }
 
         // Draw terrain into the main viewport (background)
-        draw_quadtree_leaf_cells_bw(app.terrain.get(), gui_get_show_quadtree_overlay());
+        const ImVec4 solid_col = gui_get_terrain_solid_color();
+        draw_quadtree_leaf_cells(
+            app.terrain.get(),
+            gui_get_show_quadtree_overlay(),
+            ImGui::ColorConvertFloat4ToU32(solid_col));
 
         // Rendering
         ImGui::Render();
         
         // Clear and render scene
-        glClearColor(1.00f, 1.00f, 1.00f, 1.00f);
+        const ImVec4 air_col = gui_get_terrain_air_color();
+        glClearColor(air_col.x, air_col.y, air_col.z, air_col.w);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Render ImGui draw data

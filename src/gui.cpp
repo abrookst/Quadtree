@@ -42,6 +42,8 @@ int ConsoleBuffer::overflow(int c)
 
 static bool g_show_quadtree_overlay = false;
 static int g_max_depth = 11;
+static ImVec4 g_terrain_solid_color = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
+static ImVec4 g_terrain_air_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 
 bool gui_get_show_quadtree_overlay()
 {
@@ -53,8 +55,27 @@ int gui_get_max_depth()
     return g_max_depth;
 }
 
+ImVec4 gui_get_terrain_solid_color()
+{
+    return g_terrain_solid_color;
+}
+
+ImVec4 gui_get_terrain_air_color()
+{
+    return g_terrain_air_color;
+}
+
 void gui_render()
 {
+    // Keep a rolling history of FPS for plotting.
+    // (Static storage keeps it simple and avoids allocations.)
+    static float fps_history[240] = {};
+    static int fps_history_offset = 0;
+
+    const float fps_now = ImGui::GetIO().Framerate;
+    fps_history[fps_history_offset] = fps_now;
+    fps_history_offset = (fps_history_offset + 1) % (int)(sizeof(fps_history) / sizeof(fps_history[0]));
+
     // Demo window toggle
     static bool show_demo_window = false;
     if (show_demo_window)
@@ -64,23 +85,58 @@ void gui_render()
 
     // Sample control panel
     ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(300, 200), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(360, 360), ImGuiCond_FirstUseEver);
     ImGui::Begin("Quadtree Control Panel");
-    ImGui::Text("Quadtree Visualization");
-    ImGui::Separator();
-    ImGui::Checkbox("Show Demo Window", &show_demo_window);
-    
+
+    ImGui::Text("Quadtree");
+    ImGui::TextDisabled("Controls & debug tools");
+    ImGui::Spacing();
+
     static bool show_console = true;
-    ImGui::Checkbox("Show Console", &show_console);
 
-    ImGui::Checkbox("Show Quadtree Overlay", &g_show_quadtree_overlay);
+    if (ImGui::CollapsingHeader("Windows", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Checkbox("Show ImGui Demo Window", &show_demo_window);
+        ImGui::Checkbox("Show Console", &show_console);
+        ImGui::Spacing();
+    }
 
-    ImGui::Separator();
-    ImGui::Text("Terrain Build");
-    ImGui::SliderInt("Max Depth", &g_max_depth, 1, 20);
-    
-    ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
-    ImGui::TextWrapped("Add your quadtree controls here.");
+    if (ImGui::CollapsingHeader("Visualization", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Checkbox("Show Quadtree Overlay", &g_show_quadtree_overlay);
+
+        ImGui::Spacing();
+        ImGui::Text("Colors");
+        ImGui::ColorEdit3("Solid (Terrain)", (float*)&g_terrain_solid_color);
+        ImGui::ColorEdit3("Air", (float*)&g_terrain_air_color);
+        ImGui::Spacing();
+    }
+
+    if (ImGui::CollapsingHeader("Terrain", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::PushItemWidth(-1);
+        ImGui::SliderInt("Max Depth", &g_max_depth, 1, 20);
+        ImGui::PopItemWidth();
+        ImGui::Spacing();
+    }
+
+    if (ImGui::CollapsingHeader("Performance", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Text("FPS: %.1f", fps_now);
+
+        // Animated framerate graph (rolling history)
+        ImGui::PlotLines(
+            "Framerate (FPS)",
+            fps_history,
+            (int)(sizeof(fps_history) / sizeof(fps_history[0])),
+            fps_history_offset,
+            nullptr,
+            0.0f,
+            240.0f,
+            ImVec2(0, 60));
+        ImGui::Spacing();
+    }
+
     ImGui::End();
 
     // Console window

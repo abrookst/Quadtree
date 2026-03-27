@@ -6,6 +6,8 @@
 #include <queue>
 #include <iostream>
 
+struct ImVec4;
+
 // Console buffer for capturing cout
 class ConsoleBuffer : public std::streambuf
 {
@@ -30,5 +32,9 @@ bool gui_get_show_quadtree_overlay();
 
 // Terrain build parameter (controlled via ImGui)
 int gui_get_max_depth();
+
+// Visualization colors (controlled via ImGui)
+ImVec4 gui_get_terrain_solid_color();
+ImVec4 gui_get_terrain_air_color();
 
 #endif // GUI_H
