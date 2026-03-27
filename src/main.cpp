@@ -2,6 +2,9 @@
 #include <SDL2/SDL_opengl.h>
 #include <iostream>
 #include <cstdlib>
+#include <memory>
+#include <sstream>
+#include <vector>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -13,6 +16,7 @@
 #include "backends/imgui_impl_sdl2.h"
 #include "backends/imgui_impl_opengl3.h"
 #include "gui.h"
+#include "terrain.h"
 
 void gui_render();
 
@@ -21,7 +25,101 @@ struct AppContext
 {
     SDL_Window* window;
     SDL_GLContext gl_context;
+    std::unique_ptr<Quadtree> terrain;
+    std::string loaded_terrain_file;
+    int loaded_terrain_depth;
+    int last_depth_reload_attempt;
 };
+
+static std::vector<std::string> split_ws(const std::string& s)
+{
+    std::istringstream iss(s);
+    std::vector<std::string> out;
+    std::string tok;
+    while (iss >> tok) out.push_back(tok);
+    return out;
+}
+
+static void draw_quadtree_leaf_cells_bw(const Quadtree* terrain, bool show_quadtree_overlay)
+{
+    if (!terrain) return;
+    const QuadtreeNode* root = terrain->get_root();
+    if (!root) return;
+
+    const Bounds& b = root->get_bounds();
+    const float min_x = b.get_min_x();
+    const float max_x = b.get_max_x();
+    const float min_y = b.get_min_y();
+    const float max_y = b.get_max_y();
+
+    const float range_x = (max_x - min_x);
+    const float range_y = (max_y - min_y);
+    if (range_x <= 0.0f || range_y <= 0.0f) return;
+
+    ImGuiViewport* vp = ImGui::GetMainViewport();
+    const ImVec2 vp_pos = vp->Pos;
+    const ImVec2 vp_size = vp->Size;
+
+    auto world_to_screen = [&](float wx, float wy) -> ImVec2
+    {
+        const float tx = (wx - min_x) / range_x;
+        const float ty = (max_y - wy) / range_y; // invert Y
+        return ImVec2(vp_pos.x + tx * vp_size.x, vp_pos.y + ty * vp_size.y);
+    };
+
+    auto node_bounds_to_screen = [&](const Bounds& nb, ImVec2& out_min, ImVec2& out_max)
+    {
+        const float nmin_x = nb.get_min_x();
+        const float nmax_x = nb.get_max_x();
+        const float nmin_y = nb.get_min_y();
+        const float nmax_y = nb.get_max_y();
+
+        // screen min is top-left
+        out_min = world_to_screen(nmin_x, nmax_y);
+        out_max = world_to_screen(nmax_x, nmin_y);
+    };
+
+    ImDrawList* dl = ImGui::GetBackgroundDrawList(vp);
+    const ImU32 black = IM_COL32(0, 0, 0, 255);
+    const ImU32 outline = IM_COL32(255, 0, 0, 255);
+
+    // Iterative stack to avoid recursion, but must be dynamic
+    // (terrain quadtrees can easily exceed 1024 nodes).
+    std::vector<const QuadtreeNode*> stack;
+    stack.reserve(4096);
+    stack.push_back(root);
+
+    while (!stack.empty())
+    {
+        const QuadtreeNode* node = stack.back();
+        stack.pop_back();
+        if (!node) continue;
+
+        if (!node->is_leaf())
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                const QuadtreeNode* c = node->get_child(i);
+                if (c) stack.push_back(c);
+            }
+            continue;
+        }
+
+        ImVec2 pmin, pmax;
+        node_bounds_to_screen(node->get_bounds(), pmin, pmax);
+
+        const FillState s = node->get_state();
+        if (s == FillState::Solid)
+        {
+            dl->AddRectFilled(pmin, pmax, black);
+        }
+
+        if (show_quadtree_overlay)
+        {
+            dl->AddRect(pmin, pmax, outline);
+        }
+    }
+}
 
 // Forward declarations
 bool app_init(AppContext& app);
@@ -164,7 +262,32 @@ void app_run(AppContext& app)
         if (!command.empty())
         {
             std::cout << "[COMMAND] Processing: " << command << std::endl;
-            // TODO: Add any user commands here (file reading, mostly. )
+
+            const auto args = split_ws(command);
+            if (!args.empty() && args[0] == "terrain_load")
+            {
+                const std::string file = (args.size() >= 2) ? args[1] : "default.bitmap";
+
+                std::unique_ptr<Quadtree> loaded;
+                std::string error;
+                if (!terrain_load_bitmap_file_into_quadtree(file, loaded, gui_get_max_depth(), error))
+                {
+                    std::cout << "[TERRAIN] Load failed: " << error << std::endl;
+                }
+                else
+                {
+                    app.terrain = std::move(loaded);
+                    app.loaded_terrain_file = file;
+                    app.loaded_terrain_depth = gui_get_max_depth();
+                    app.last_depth_reload_attempt = app.loaded_terrain_depth;
+                    std::cout << "[TERRAIN] Loaded bitmap into quadtree: nodes=" << app.terrain->get_node_count()
+                              << " depth=" << app.terrain->get_depth() << std::endl;
+                }
+            }
+            else
+            {
+                std::cout << "[ERROR] Unknown command: " << (args.empty() ? command : args[0]) << std::endl;
+            }
         }
 
         // Start ImGui frame
@@ -175,11 +298,39 @@ void app_run(AppContext& app)
         // Render GUI
         gui_render();
 
+        // If the depth slider changes, rebuild the quadtree by reloading the last loaded file.
+        const int requested_depth = gui_get_max_depth();
+        if (app.terrain && !app.loaded_terrain_file.empty() && requested_depth != app.loaded_terrain_depth)
+        {
+            // Only attempt a reload once per distinct requested depth.
+            if (requested_depth != app.last_depth_reload_attempt)
+            {
+                app.last_depth_reload_attempt = requested_depth;
+
+                std::unique_ptr<Quadtree> reloaded;
+                std::string error;
+                if (!terrain_load_bitmap_file_into_quadtree(app.loaded_terrain_file, reloaded, requested_depth, error))
+                {
+                    std::cout << "[TERRAIN] Rebuild failed: " << error << std::endl;
+                }
+                else
+                {
+                    app.terrain = std::move(reloaded);
+                    app.loaded_terrain_depth = requested_depth;
+                    std::cout << "[TERRAIN] Rebuilt quadtree: nodes=" << app.terrain->get_node_count()
+                              << " depth=" << app.terrain->get_depth() << std::endl;
+                }
+            }
+        }
+
+        // Draw terrain into the main viewport (background)
+        draw_quadtree_leaf_cells_bw(app.terrain.get(), gui_get_show_quadtree_overlay());
+
         // Rendering
         ImGui::Render();
         
         // Clear and render scene
-        glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
+        glClearColor(1.00f, 1.00f, 1.00f, 1.00f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Render ImGui draw data
@@ -216,7 +367,7 @@ int main(int argc, char* argv[])
     std::cout.rdbuf(&console_buffer);
     std::cerr.rdbuf(&console_buffer);
 
-    AppContext app = { nullptr, nullptr };
+    AppContext app = { nullptr, nullptr, nullptr, "", 0, 0 };
 
     try
     {

@@ -40,6 +40,19 @@ int ConsoleBuffer::overflow(int c)
     return c;
 }
 
+static bool g_show_quadtree_overlay = false;
+static int g_max_depth = 11;
+
+bool gui_get_show_quadtree_overlay()
+{
+    return g_show_quadtree_overlay;
+}
+
+int gui_get_max_depth()
+{
+    return g_max_depth;
+}
+
 void gui_render()
 {
     // Demo window toggle
@@ -59,6 +72,12 @@ void gui_render()
     
     static bool show_console = true;
     ImGui::Checkbox("Show Console", &show_console);
+
+    ImGui::Checkbox("Show Quadtree Overlay", &g_show_quadtree_overlay);
+
+    ImGui::Separator();
+    ImGui::Text("Terrain Build");
+    ImGui::SliderInt("Max Depth", &g_max_depth, 1, 20);
     
     ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
     ImGui::TextWrapped("Add your quadtree controls here.");

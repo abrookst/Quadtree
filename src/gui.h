@@ -25,4 +25,10 @@ private:
 // GUI rendering function
 void gui_render();
 
+// Debug overlay toggle (set via ImGui)
+bool gui_get_show_quadtree_overlay();
+
+// Terrain build parameter (controlled via ImGui)
+int gui_get_max_depth();
+
 #endif // GUI_H
