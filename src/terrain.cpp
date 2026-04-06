@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -30,14 +31,17 @@ static std::vector<std::string> split_ws(const std::string& s)
     return out;
 }
 
-static bool try_open(std::ifstream& in, const std::string& path)
+static bool try_open(std::ifstream& in, const std::filesystem::path& path)
 {
-    in.open(path);
+    in.open(path, std::ios::in);
     return in.is_open();
 }
 
 static bool open_terrain_file(std::ifstream& in, const std::string& filename, std::string& out_opened_path)
 {
+    namespace fs = std::filesystem;
+
+    // Try as provided first (works for absolute paths and simple relative input).
     // Try as provided
     if (try_open(in, filename))
     {
@@ -45,19 +49,30 @@ static bool open_terrain_file(std::ifstream& in, const std::string& filename, st
         return true;
     }
 
-    // Try common relative locations
-    const std::string p1 = std::string("assets/terrain/") + filename;
-    if (try_open(in, p1))
-    {
-        out_opened_path = p1;
-        return true;
-    }
+    const fs::path file_path(filename);
+    fs::path probe = fs::current_path();
 
-    const std::string p2 = std::string("../assets/terrain/") + filename;
-    if (try_open(in, p2))
+    // Walk up the directory tree so running from build/, build/Debug/, etc. still finds assets.
+    for (int i = 0; i < 8; i++)
     {
-        out_opened_path = p2;
-        return true;
+        const fs::path p1 = probe / file_path;
+        if (try_open(in, p1))
+        {
+            out_opened_path = p1.generic_string();
+            return true;
+        }
+
+        const fs::path p2 = probe / "assets" / "terrain" / file_path;
+        if (try_open(in, p2))
+        {
+            out_opened_path = p2.generic_string();
+            return true;
+        }
+
+        if (!probe.has_parent_path()) break;
+        const fs::path parent = probe.parent_path();
+        if (parent == probe) break;
+        probe = parent;
     }
 
     return false;

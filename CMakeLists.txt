@@ -12,13 +12,23 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Use FetchContent to automatically download dependencies
 include(FetchContent)
 
-# Fetch SDL2
-FetchContent_Declare(SDL2
-    URL https://github.com/libsdl-org/SDL/releases/download/release-2.28.5/SDL2-2.28.5.tar.gz
-    SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/sdl2-src"
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-)
+# --- SDL2 ---
+# On Linux, prefer system-installed SDL2 if available. On Windows/macOS,
+# it's more reliable to fetch it.
+if(UNIX AND NOT APPLE)
+    find_package(SDL2 REQUIRED)
+    set(SDL2_FETCHED_SOURCE FALSE)
+else()
+    # Fetch SDL2
+    FetchContent_Declare(SDL2
+        URL https://github.com/libsdl-org/SDL/releases/download/release-2.28.5/SDL2-2.28.5.tar.gz
+        SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/sdl2-src"
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    set(SDL2_FETCHED_SOURCE TRUE)
+endif()
 
+# --- ImGui ---
 # Fetch ImGui
 FetchContent_Declare(imgui
     # Docking (IDE-like snapping) lives on the 'docking' branch
@@ -26,7 +36,11 @@ FetchContent_Declare(imgui
     SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/imgui-src"
 )
 
-FetchContent_MakeAvailable(SDL2 imgui)
+if(SDL2_FETCHED_SOURCE)
+    FetchContent_MakeAvailable(SDL2 imgui)
+else()
+    FetchContent_MakeAvailable(imgui)
+endif()
 
 # Find OpenGL (portable target names differ across platforms)
 if(WIN32 AND NOT MSVC)
