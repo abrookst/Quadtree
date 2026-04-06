@@ -48,18 +48,7 @@ enum class FillState
     Mixed,
 };
 
-std::string fillstate_string(FillState fs){
-    if(fs == FillState::Empty){
-        return "Empty";
-    }
-    if(fs == FillState::Solid){
-        return "Solid";
-    }
-    if(fs == FillState::Mixed){
-        return "Mixed";
-    }
-    return "NULL";
-}
+
 
 // Forward declaration
 class QuadtreeNode;
