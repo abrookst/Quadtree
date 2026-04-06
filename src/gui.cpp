@@ -42,6 +42,7 @@ int ConsoleBuffer::overflow(int c)
 
 static bool g_show_quadtree_overlay = false;
 static int g_max_depth = 11;
+static float g_brush_radius = 50.0f;
 static ImVec4 g_terrain_solid_color = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
 static ImVec4 g_terrain_air_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 
@@ -53,6 +54,11 @@ bool gui_get_show_quadtree_overlay()
 int gui_get_max_depth()
 {
     return g_max_depth;
+}
+
+float gui_get_brush_radius()
+{
+    return g_brush_radius;
 }
 
 ImVec4 gui_get_terrain_solid_color()
@@ -116,6 +122,7 @@ void gui_render()
     {
         ImGui::PushItemWidth(-1);
         ImGui::SliderInt("Max Depth", &g_max_depth, 1, 20);
+        ImGui::SliderFloat("Brush Radius", &g_brush_radius, 1.0f, 500.0f);
         ImGui::PopItemWidth();
         ImGui::Spacing();
     }

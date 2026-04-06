@@ -29,6 +29,12 @@ struct AppContext
     std::string loaded_terrain_file;
     int loaded_terrain_depth;
     int last_depth_reload_attempt;
+    
+    // Cached world bounds for coordinate transformation
+    float world_min_x = 0.0f;
+    float world_max_x = 0.0f;
+    float world_min_y = 0.0f;
+    float world_max_y = 0.0f;
 };
 
 static std::vector<std::string> split_ws(const std::string& s)
@@ -40,7 +46,32 @@ static std::vector<std::string> split_ws(const std::string& s)
     return out;
 }
 
-static void draw_quadtree_leaf_cells(const Quadtree* terrain, bool show_quadtree_overlay, ImU32 solid_color)
+static void screen_to_world(float screen_x, float screen_y, const AppContext& app, float& out_world_x, float& out_world_y)
+{
+    ImGuiViewport* vp = ImGui::GetMainViewport();
+    const ImVec2 vp_pos = vp->Pos;
+    const ImVec2 vp_size = vp->Size;
+    
+    float range_x = app.world_max_x - app.world_min_x;
+    float range_y = app.world_max_y - app.world_min_y;
+    
+    if (range_x <= 0.0f || range_y <= 0.0f)
+    {
+        out_world_x = 0.0f;
+        out_world_y = 0.0f;
+        return;
+    }
+    
+    // Normalize screen coordinates relative to viewport
+    float norm_x = (screen_x - vp_pos.x) / vp_size.x;
+    float norm_y = (screen_y - vp_pos.y) / vp_size.y;
+    
+    // Convert to world coordinates
+    out_world_x = app.world_min_x + norm_x * range_x;
+    out_world_y = app.world_max_y - norm_y * range_y; // Invert Y like in rendering
+}
+
+static void draw_quadtree_leaf_cells(const Quadtree* terrain, bool show_quadtree_overlay, ImU32 solid_color, AppContext& app)
 {
     if (!terrain) return;
     const QuadtreeNode* root = terrain->get_root();
@@ -51,6 +82,12 @@ static void draw_quadtree_leaf_cells(const Quadtree* terrain, bool show_quadtree
     const float max_x = b.get_max_x();
     const float min_y = b.get_min_y();
     const float max_y = b.get_max_y();
+
+    // Cache world bounds for coordinate transformation
+    app.world_min_x = min_x;
+    app.world_max_x = max_x;
+    app.world_min_y = min_y;
+    app.world_max_y = max_y;
 
     const float range_x = (max_x - min_x);
     const float range_y = (max_y - min_y);
@@ -253,6 +290,19 @@ void app_run(AppContext& app)
                     if (event.key.keysym.sym == SDLK_ESCAPE)
                         running = false;
                     break;
+                case SDL_MOUSEBUTTONDOWN:
+                    if (event.button.button == SDL_BUTTON_LEFT && app.terrain)
+                    {
+                        float world_x, world_y;
+                        screen_to_world((float)event.button.x, (float)event.button.y, app, world_x, world_y);
+                        
+                        float brush_radius = gui_get_brush_radius();
+                        //call setcircle here
+                        
+                        std::cout << "[ACTION] Destroyed circle at (" << world_x << ", " << world_y 
+                                  << ") with radius " << brush_radius << std::endl;
+                    }
+                    break;
             }
         }
 
@@ -340,7 +390,8 @@ void app_run(AppContext& app)
         draw_quadtree_leaf_cells(
             app.terrain.get(),
             gui_get_show_quadtree_overlay(),
-            ImGui::ColorConvertFloat4ToU32(solid_col));
+            ImGui::ColorConvertFloat4ToU32(solid_col),
+            app);
 
         // Rendering
         ImGui::Render();

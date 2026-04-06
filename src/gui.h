@@ -33,6 +33,9 @@ bool gui_get_show_quadtree_overlay();
 // Terrain build parameter (controlled via ImGui)
 int gui_get_max_depth();
 
+// Brush radius for circle destruction (controlled via ImGui)
+float gui_get_brush_radius();
+
 // Visualization colors (controlled via ImGui)
 ImVec4 gui_get_terrain_solid_color();
 ImVec4 gui_get_terrain_air_color();
