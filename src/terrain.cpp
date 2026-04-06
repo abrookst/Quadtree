@@ -239,3 +239,78 @@ bool terrain_load_bitmap_file_into_quadtree(
     out_tree = std::move(tree);
     return true;
 }
+
+bool terrain_save_bitmap_file(
+    const std::string& filename,
+    const uint8_t* solid,
+    int width,
+    int height,
+    std::string& out_error)
+{
+    out_error.clear();
+
+    if (!solid || width <= 0 || height <= 0)
+    {
+        out_error = "Invalid bitmap dimensions or null data";
+        return false;
+    }
+
+    std::ofstream out;
+    out.open(filename, std::ios::out);
+    if (!out.is_open())
+    {
+        out_error = "Could not open file for writing: " + filename;
+        return false;
+    }
+
+    // Write header
+    out << width << " " << height << "\n";
+
+    if (!out.good())
+    {
+        out_error = "Error writing bitmap header";
+        return false;
+    }
+
+    // Write pixel rows
+    for (int y = 0; y < height; y++)
+    {
+        for (int x = 0; x < width; x++)
+        {
+            const uint8_t pixel = solid[static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x)];
+            out << (pixel ? '1' : '2');
+        }
+        out << "\n";
+
+        if (!out.good())
+        {
+            out_error = "Error writing bitmap data at row " + std::to_string(y);
+            return false;
+        }
+    }
+
+    out.close();
+    return true;
+}
+
+bool terrain_build_quadtree_from_bitmap(
+    const uint8_t* solid,
+    int width,
+    int height,
+    int max_depth,
+    std::unique_ptr<Quadtree>& out_tree)
+{
+    if (!solid || width <= 0 || height <= 0)
+        return false;
+
+    const int inferred_depth = ceil_log2_int(std::max(width, height));
+    const int depth_to_use = (max_depth >= 0) ? max_depth : inferred_depth;
+    // Bounds constructor takes full width/height (it stores half extents internally).
+    const Bounds bounds(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
+
+    auto tree = std::make_unique<Quadtree>(bounds, std::max(0, depth_to_use), false);
+    tree->build_from_bitmap(solid, width, height);
+
+    out_tree = std::move(tree);
+    return true;
+}

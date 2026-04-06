@@ -352,6 +352,54 @@ void app_run(AppContext& app)
             }
         }
 
+        // Check for terrain reload request from draw mode
+        if (TerrainDraw::has_reload_request())
+        {
+            bool from_draw = TerrainDraw::is_reload_from_draw();
+            TerrainDraw::clear_reload_request();
+
+            std::unique_ptr<Quadtree> loaded;
+            
+            if (from_draw)
+            {
+                // Load from draw buffer directly
+                const TerrainDraw::DrawBitmap& draw_bmp = TerrainDraw::get_draw_bitmap();
+                if (terrain_build_quadtree_from_bitmap(
+                    draw_bmp.data.data(),
+                    draw_bmp.width,
+                    draw_bmp.height,
+                    gui_get_max_depth(),
+                    loaded))
+                {
+                    app.terrain = std::move(loaded);
+                    app.loaded_terrain_file = "[drawn]";
+                    app.loaded_terrain_depth = gui_get_max_depth();
+                    app.last_depth_reload_attempt = app.loaded_terrain_depth;
+                    std::cout << "[TERRAIN] Loaded drawn terrain into quadtree: nodes=" << app.terrain->get_node_count()
+                              << " depth=" << app.terrain->get_depth() << std::endl;
+                }
+            }
+            else
+            {
+                // Load from file
+                const std::string file = TerrainDraw::get_reload_file();
+                std::string error;
+                if (!terrain_load_bitmap_file_into_quadtree(file, loaded, gui_get_max_depth(), error))
+                {
+                    std::cout << "[TERRAIN] Load failed: " << error << std::endl;
+                }
+                else
+                {
+                    app.terrain = std::move(loaded);
+                    app.loaded_terrain_file = file;
+                    app.loaded_terrain_depth = gui_get_max_depth();
+                    app.last_depth_reload_attempt = app.loaded_terrain_depth;
+                    std::cout << "[TERRAIN] Loaded drawn terrain into quadtree: nodes=" << app.terrain->get_node_count()
+                              << " depth=" << app.terrain->get_depth() << std::endl;
+                }
+            }
+        }
+
         // Start ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL2_NewFrame();

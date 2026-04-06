@@ -16,4 +16,18 @@ bool terrain_load_bitmap_file_into_quadtree(
     int max_depth,
     std::string& out_error);
 
+bool terrain_build_quadtree_from_bitmap(
+    const uint8_t* solid,
+    int width,
+    int height,
+    int max_depth,
+    std::unique_ptr<Quadtree>& out_tree);
+
+bool terrain_save_bitmap_file(
+    const std::string& filename,
+    const uint8_t* solid,
+    int width,
+    int height,
+    std::string& out_error);
+
 #endif // TERRAIN_H
