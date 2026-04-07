@@ -6,6 +6,7 @@
 #include <queue>
 #include <iostream>
 #include <vector>
+#include <cstdint>
 
 struct ImVec4;
 
