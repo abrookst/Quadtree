@@ -35,10 +35,10 @@ void QuadtreeNode::set_circle(float radius, float x, float y) {
     } if (bounds_.fully_contained_by_circle(radius, x, y)) {
         std::cout << "fully in circle" << std::endl;
         std::cout << "PARTIAL at depth " << depth_ << std::endl;
-        state_ = FillState::Empty;
+        set_all(FillState::Empty);
         return;
     } if (depth_ >= max_depth_) {
-        state_ = FillState::Empty;
+        set_all(FillState::Empty);
         return;
     }
     
