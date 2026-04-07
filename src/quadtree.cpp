@@ -1,5 +1,6 @@
 #include "quadtree.h"
 
+#include <iostream>
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -18,6 +19,39 @@ QuadtreeNode::QuadtreeNode(const Bounds& bounds, int depth, int max_depth, FillS
     , state_(state)
 {
     for (auto& child : children_) child.reset();
+}
+
+void Quadtree::set_circle(float radius, float x, float y) {
+    QuadtreeNode* root = root_.get();
+    root->set_circle(radius, x, y);
+    
+}
+
+void QuadtreeNode::set_circle(float radius, float x, float y) {
+    if (!bounds_.intersects_circle(radius, x, y)) {
+        std::cout << "not in circle" << std::endl;
+        std::cout << "FULL at depth " << depth_ << std::endl;
+        return;
+    } if (bounds_.fully_contained_by_circle(radius, x, y)) {
+        std::cout << "fully in circle" << std::endl;
+        std::cout << "PARTIAL at depth " << depth_ << std::endl;
+        state_ = FillState::Empty;
+        return;
+    } if (depth_ >= max_depth_) {
+        state_ = FillState::Empty;
+        return;
+    }
+    
+    if (is_leaf()) {
+        std::cout << "subdivided" << std::endl;
+        subdivide();
+    }
+
+    children_[0]->set_circle(radius, x, y);
+    children_[1]->set_circle(radius, x, y);
+    children_[2]->set_circle(radius, x, y);
+    children_[3]->set_circle(radius, x, y);
+    try_collapse();
 }
 
 void QuadtreeNode::subdivide()
@@ -83,8 +117,8 @@ int QuadtreeNode::child_index_for_point(float px, float py) const
     return 3;
 }
 
-const QuadtreeNode* Quadtree::findNodeAtPoint(float px, float py) {
-    const QuadtreeNode* returnNode = this->get_root();
+QuadtreeNode* Quadtree::findNodeAtPoint(float px, float py) {
+    QuadtreeNode* returnNode = root_.get();
     while (!returnNode->is_leaf()) {
         int childIndex = returnNode->child_index_for_point(px, py);
         returnNode = returnNode->get_child(childIndex);

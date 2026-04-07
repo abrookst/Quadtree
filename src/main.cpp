@@ -314,8 +314,11 @@ void app_run(AppContext& app)
                         
                         std::cout << "[ACTION] Destroyed circle at (" << world_x << ", " << world_y 
                                   << ") with radius " << brush_radius << std::endl;
-                        const QuadtreeNode* clickedNode = app.terrain->findNodeAtPoint(world_x, world_y);
+                        QuadtreeNode* clickedNode = app.terrain->findNodeAtPoint(world_x, world_y);
                         std::cout << "[EVENT] State of node is: " << fillstate_string(clickedNode->get_state()) << std::endl;
+                        
+                        clickedNode->set_circle(30, world_x, world_y);
+
                     }
                     
                     break;

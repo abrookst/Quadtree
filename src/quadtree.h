@@ -34,6 +34,7 @@ struct Bounds
     float clamp(float val, float min, float max) {
         if (val < min) return min;
         if (val > max) return max;
+        else return val;
     }
 
     bool intersects_circle(float radius, float x, float y) {
@@ -41,7 +42,7 @@ struct Bounds
         float closestY = clamp(y, get_min_y(), get_max_y());
 
         float distanceX = x - closestX;
-        float distanceY = y = closestY;
+        float distanceY = y - closestY;
         float distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
 
         return distanceSquared <= (radius * radius);
@@ -49,7 +50,7 @@ struct Bounds
 
     bool fully_contained_by_circle(float radius, float x, float y) {
         float radiusSquared = radius * radius;
-        float sumSq = 0;
+
 
         float dx = fmaxf(fabsf(x - get_min_x()), fabsf(x - get_max_x()));
         float dy = fmaxf(fabsf(y - get_min_y()), fabsf(y - get_max_y()));
@@ -113,7 +114,7 @@ public:
     FillState query_region(const Bounds& region) const;
 
     // find node at world space coords
-    const QuadtreeNode* findNodeAtPoint(float px, float py);
+    QuadtreeNode* findNodeAtPoint(float px, float py);
 
     // call set_circle on nodes
     void set_circle(float radius, float x, float y);
