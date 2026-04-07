@@ -3,6 +3,8 @@
 
 #include <memory>
 #include <string>
+#include <math.h>
+#include <stdbool.h>
 
 // 2D bounding rectangle
 struct Bounds
@@ -29,6 +31,34 @@ struct Bounds
                  y + half_height < other.y - other.half_height);
     }
 
+    float clamp(float val, float min, float max) {
+        if (val < min) return min;
+        if (val > max) return max;
+    }
+
+    bool intersects_circle(float radius, float x, float y) {
+        float closestX = clamp(x, get_min_x(), get_max_x());
+        float closestY = clamp(y, get_min_y(), get_max_y());
+
+        float distanceX = x - closestX;
+        float distanceY = y = closestY;
+        float distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
+
+        return distanceSquared <= (radius * radius);
+    }
+
+    bool fully_contained_by_circle(float radius, float x, float y) {
+        float radiusSquared = radius * radius;
+        float sumSq = 0;
+
+        float dx = fmaxf(fabsf(x - get_min_x()), fabsf(x - get_max_x()));
+        float dy = fmaxf(fabsf(y - get_min_y()), fabsf(y - get_max_y()));
+
+        return (dx * dx + dy * dy) <= radiusSquared;
+
+    }
+
+
     bool contains_bounds(const Bounds& other) const
     {
         return get_min_x() <= other.get_min_x() && get_max_x() >= other.get_max_x() &&
@@ -47,6 +77,7 @@ enum class FillState
     Solid,
     Mixed,
 };
+
 
 
 
@@ -81,6 +112,12 @@ public:
     // Query whether a region is entirely empty/solid, or mixed
     FillState query_region(const Bounds& region) const;
 
+    // find node at world space coords
+    const QuadtreeNode* findNodeAtPoint(float px, float py);
+
+    // call set_circle on nodes
+    void set_circle(float radius, float x, float y);
+
     // Clear the tree
     void clear();
 
@@ -105,6 +142,11 @@ class QuadtreeNode
 public:
     QuadtreeNode(const Bounds& bounds, int depth, int max_depth, FillState state);
 
+    
+    // fills in the circle
+    void set_circle(float radius, float x, float y);
+
+    
     const Bounds& get_bounds() const { return bounds_; }
     bool is_leaf() const { return children_[0] == nullptr; }
     FillState get_state() const { return state_; }

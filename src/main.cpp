@@ -46,6 +46,19 @@ static std::vector<std::string> split_ws(const std::string& s)
     return out;
 }
 
+static std::string fillstate_string(FillState fs){
+    if(fs == FillState::Empty){
+        return "Empty";
+    }
+    if(fs == FillState::Solid){
+        return "Solid";
+    }
+    if(fs == FillState::Mixed){
+        return "Mixed";
+    }
+    return "NULL";
+}
+
 static void screen_to_world(float screen_x, float screen_y, const AppContext& app, float& out_world_x, float& out_world_y)
 {
     ImGuiViewport* vp = ImGui::GetMainViewport();
@@ -301,7 +314,10 @@ void app_run(AppContext& app)
                         
                         std::cout << "[ACTION] Destroyed circle at (" << world_x << ", " << world_y 
                                   << ") with radius " << brush_radius << std::endl;
+                        const QuadtreeNode* clickedNode = app.terrain->findNodeAtPoint(world_x, world_y);
+                        std::cout << "[EVENT] State of node is: " << fillstate_string(clickedNode->get_state()) << std::endl;
                     }
+                    
                     break;
             }
         }

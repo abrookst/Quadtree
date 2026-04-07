@@ -83,6 +83,15 @@ int QuadtreeNode::child_index_for_point(float px, float py) const
     return 3;
 }
 
+const QuadtreeNode* Quadtree::findNodeAtPoint(float px, float py) {
+    const QuadtreeNode* returnNode = this->get_root();
+    while (!returnNode->is_leaf()) {
+        int childIndex = returnNode->child_index_for_point(px, py);
+        returnNode = returnNode->get_child(childIndex);
+    }
+    return returnNode;
+}
+
 bool QuadtreeNode::is_filled(float px, float py) const
 {
     if (!bounds_.contains(px, py)) return false;

@@ -25,3 +25,4 @@ _deps/
 *.o
 *.so
 .DS_Store
+imgui.ini
