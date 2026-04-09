@@ -28,25 +28,26 @@ void Quadtree::set_circle(float radius, float x, float y) {
 }
 
 void QuadtreeNode::set_circle(float radius, float x, float y) {
+    //if the circle doesnt intersect this node's bounding box, we can move on
     if (!bounds_.intersects_circle(radius, x, y)) {
-        std::cout << "not in circle" << std::endl;
-        std::cout << "FULL at depth " << depth_ << std::endl;
         return;
-    } if (bounds_.fully_contained_by_circle(radius, x, y)) {
-        std::cout << "fully in circle" << std::endl;
-        std::cout << "PARTIAL at depth " << depth_ << std::endl;
+    } 
+    //if the bounds of this node are fully encased in the circle, we can set all its kids to empty and move on.
+    if (bounds_.fully_contained_by_circle(radius, x, y)) {
         set_all(FillState::Empty);
         return;
-    } if (depth_ >= max_depth_) {
+    } 
+    //if we're at max depth, set to empty and move on
+    if (depth_ >= max_depth_) {
         set_all(FillState::Empty);
         return;
     }
-    
+    //we know this is on the edge of the circle (intersects but doesnt fully contain), so subdivide for greater circle resolution
     if (is_leaf()) {
-        std::cout << "subdivided" << std::endl;
         subdivide();
     }
 
+    //recurse to all children, then try to collapse any redundant nodes when back.
     children_[0]->set_circle(radius, x, y);
     children_[1]->set_circle(radius, x, y);
     children_[2]->set_circle(radius, x, y);
