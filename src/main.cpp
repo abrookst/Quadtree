@@ -306,16 +306,19 @@ void app_run(AppContext& app)
                 case SDL_MOUSEBUTTONDOWN:
                     if (event.button.button == SDL_BUTTON_LEFT && app.terrain)
                     {
-                        float world_x, world_y;
-                        screen_to_world((float)event.button.x, (float)event.button.y, app, world_x, world_y);
-                        
-                        float brush_radius = gui_get_brush_radius();
-                        //call setcircle here
-                        
-                        std::cout << "[ACTION] Destroyed circle at (" << world_x << ", " << world_y 
-                                  << ") with radius " << brush_radius << std::endl;
-                        app.terrain->set_circle(brush_radius, world_x, world_y);
-
+                        ImGuiIO& io = ImGui::GetIO();
+                        if (!io.WantCaptureMouse)
+                        {
+                            float world_x, world_y;
+                            screen_to_world((float)event.button.x, (float)event.button.y, app, world_x, world_y);
+                            
+                            float brush_radius = gui_get_brush_radius();
+                            //call setcircle here
+                            
+                            std::cout << "[ACTION] Destroyed circle at (" << world_x << ", " << world_y 
+                                      << ") with radius " << brush_radius << std::endl;
+                            app.terrain->set_circle(brush_radius, world_x, world_y);
+                        }
                     }
                     
                     break;

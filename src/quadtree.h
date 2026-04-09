@@ -91,14 +91,6 @@ class Quadtree
 public:
     Quadtree(const Bounds& bounds, int max_depth = 8, bool initial_filled = false);
     ~Quadtree();
-
-    // Build from a binary bitmap (1 = solid, 0 = air) using all-or-nothing subdivision.
-    //
-    // For each node representing a region:
-    // - if region is entirely solid (all 1s) => mark Solid leaf
-    // - if region is entirely empty (all 0s) => mark Empty leaf
-    // - if region contains both => subdivide into 4 children (unless at max_depth)
-    // - at max_depth with mixed content => leaf is marked Mixed (visually: use majority for blending)
     void build_from_bitmap(const uint8_t* solid, int width, int height);
 
     // Set entire tree to solid/empty
