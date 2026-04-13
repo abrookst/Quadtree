@@ -200,6 +200,18 @@ int gui_get_terrain_display_height()
     return g_terrain_display_height;
 }
 
+    static float bomb_radius = 5.0f;
+    static float bomb_gravity = 98.0f;
+    static float bomb_bounce = 0.5f;
+    static float bomb_explode_time = 3.0f;
+    static float bomb_explode_radius = 10.0f;
+
+float gui_get_bomb_radius() { return bomb_radius; }
+float gui_get_bomb_gravity() { return bomb_gravity; }
+float gui_get_bomb_bounce() { return bomb_bounce; }
+float gui_get_bomb_explode_time() { return bomb_explode_time; }
+float gui_get_bomb_explode_radius() { return bomb_explode_radius; }
+
 ImVec4 gui_get_terrain_solid_color()
 {
     return g_terrain_solid_color;
@@ -257,14 +269,6 @@ void gui_render(AppContext& app)
         ImGui::ShowDemoWindow(&show_demo_window);
     }
 
-    ImDrawList* draw = ImGui::GetBackgroundDrawList();
-
-    for (auto& bomb : app.bombs) {
-            if (bomb.isActive()) {
-                bomb.update(1.0f / 60.0f);
-                bomb.draw(draw);
-            }
-        }   
     // Sample control panel
     ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(480, 500), ImGuiCond_FirstUseEver);
@@ -304,6 +308,18 @@ void gui_render(AppContext& app)
         ImGui::Text("Colors");
         ImGui::ColorEdit3("Solid (Terrain)", (float*)&g_terrain_solid_color);
         ImGui::ColorEdit3("Air", (float*)&g_terrain_air_color);
+        ImGui::Spacing();
+    }
+
+    if (ImGui::CollapsingHeader("Bomb Settings", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::PushItemWidth(150);
+        ImGui::SliderFloat("Bomb Radius", &bomb_radius, 1.0f, 50.0f);
+        ImGui::SliderFloat("Gravity", &bomb_gravity, 0.0f, 300.0f);
+        ImGui::SliderFloat("Bounce Strength", &bomb_bounce, 0.0f, 2.0f);
+        ImGui::SliderFloat("Explosion Delay", &bomb_explode_time, 0.1f, 10.0f);
+        ImGui::SliderFloat("Explosion Radius", &bomb_explode_radius, 1.0f, 100.0f);
+        ImGui::PopItemWidth();
         ImGui::Spacing();
     }
 
@@ -550,6 +566,22 @@ void gui_render(AppContext& app)
                 TerrainDestruct::request_destruction(world_x, world_y, brush_radius);
             }
             
+            // Draw active bombs using mapped screen coordinates
+            for (auto& bomb : app.bombs) {
+                if (bomb.isActive()) {
+                    // We also update them here for convenience, though later this should be in the main physics loop
+                    bomb.update(1.0f / 60.0f);
+                    ImVec2 screen_pos = world_to_screen(bomb.getX(), bomb.getY());
+                    
+                    // Note: bomb.radius in world coords. In screen coords it scales by (canvas_width / range_x)
+                    // We assume uniform aspect ratio, so canvas_width / range_x = zoom
+                    float screen_radius = bomb.getRadius() * (canvas_width / range_x);
+                    
+                    // If bomb moves off screen, hide or draw it? Usually we just draw it!
+                    bomb.draw(draw_list, screen_pos, screen_radius);
+                }
+            }
+
             // Reserve space for canvas
             ImGui::Dummy(ImVec2(canvas_width, canvas_height));
         }

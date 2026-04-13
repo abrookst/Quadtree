@@ -4,7 +4,7 @@
 #include "quadtree.h"
 
 
-class AppContext;
+struct AppContext;
 
 class Bomb {
 
@@ -16,8 +16,17 @@ public:
     // Update physics
     void update(float dt);
 
+    // Get and Edit properties
+    void setGravity(float g) { gravity = g; }
+    void setBounceStrength(float b) { bounceStrength = b; }
+    void setExplodeRadius(float r) { explodeRadius = r; }
+    void setExplodeTime(float t) { explodeTime = t; }
+
+    float getRadius() const { return radius; }
+    void setRadius(float r) { radius = r; }
+
     // Draw entity
-    void draw(ImDrawList* drawList);
+    void draw(ImDrawList* drawList, ImVec2 screenPos, float screenRadius);
 
     // Set Velocity
     void setVelocity(float vx, float vy);
@@ -60,9 +69,10 @@ private:
     // physics
     float bounceStrength;
 
-    static constexpr float gravity = 98.0f;
+    float gravity;
 
     float explodeTime;
+    float explodeRadius = 10.0f;
 
     float lifeTimer;
 

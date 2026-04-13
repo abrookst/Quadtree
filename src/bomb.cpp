@@ -10,7 +10,8 @@ Bomb::Bomb(float x, float y, float radius, float explodeTime, AppContext& app)
     vx(0.0f),
     vy(0.0f),
     radius(radius),
-    bounceStrength(0.95f),
+    bounceStrength(0.5f),
+    gravity(98.0f),
     active(true),
     explodeTime(explodeTime),
     lifeTimer(0.0f),
@@ -25,7 +26,7 @@ Bomb::Bomb(float x, float y, float radius, float explodeTime, AppContext& app)
 void Bomb::update(float dt) {
 
     // Apply gravity
-    vy += gravity * dt;
+    vy -= gravity * dt;
 
     // Move
     x += vx * dt;
@@ -43,11 +44,10 @@ void Bomb::update(float dt) {
 }
 
 // Draw bomb
-void Bomb::draw(ImDrawList* drawList) {
-    std::cout << "[BOMB] Drew bomb at " << x << " " << y << std::endl;
+void Bomb::draw(ImDrawList* drawList, ImVec2 screenPos, float screenRadius) {
     drawList->AddCircleFilled(
-        ImVec2(x, y),
-        radius,
+        screenPos,
+        screenRadius,
         IM_COL32(lifeTimer / explodeTime * 255, 100, 100, 255)
     );
 }
@@ -70,9 +70,7 @@ float Bomb::getY() const {
 }
 
 void Bomb::explode() {
-    float world_x, world_y;
-    screen_to_world(x, y, world_x, world_y);
-    terrain->set_circle(50.0f, world_x, world_y);
+    terrain->set_circle(explodeRadius, x, y); // x and y are world coordinates!
     active = false;
 }
 
@@ -120,10 +118,7 @@ void Bomb::resolveTerrainCollision() {
 
             float py = y + sin(angle) * radius;
 
-            float world_px, world_py;
-            screen_to_world(px, py, world_px, world_py);
-
-            if (terrain->is_filled(world_px, world_py)) {
+            if (terrain->is_filled(px, py)) {
                 std::cout << "[BOMB] Collision event!" << std::endl;
                 
                 collided = true;
@@ -154,18 +149,28 @@ void Bomb::handleCollision() {
     float dot = vx * nx + vy * ny;
 
     if (dot < 0) {
+        // Normal bounce 
         vx -= 2.0f * dot * nx;
         vy -= 2.0f * dot * ny;
 
         vx *= bounceStrength;
         vy *= bounceStrength;
+        
+        float tx = -ny;
+        float ty = nx;
+        float tDot = vx * tx + vy * ty;
+
+        vx -= tDot * tx * 0.2f;
+        vy -= tDot * ty * 0.2f;
+
+        if (abs(dot) < 15.0f && bounceStrength < 0.9f) {
+            // Apply heavy damping if it's barely bouncing anymore
+            vx *= 0.5f;
+            vy *= 0.5f;
+        }
     }
-    
-
-   
-
-    x += nx * 2.0f;
-    y += ny * 2.0f;
+    x += nx * 2.5f;
+    y += ny * 2.5f;
 }
 
 
@@ -187,10 +192,7 @@ void Bomb::computeTerrainNormal(float& nx, float& ny)
         float py =
             y - sin(angle) * radius;
 
-        float world_px, world_py;
-        screen_to_world(px, py, world_px, world_py);
-
-        if (terrain->is_filled(world_px, world_py))
+        if (terrain->is_filled(px, py))
         {
             nx += cos(angle);
             ny += sin(angle);

@@ -58,6 +58,13 @@ int gui_get_terrain_display_height();
 ImVec4 gui_get_terrain_solid_color();
 ImVec4 gui_get_terrain_air_color();
 
+// Bomb Settings
+float gui_get_bomb_radius();
+float gui_get_bomb_gravity();
+float gui_get_bomb_bounce();
+float gui_get_bomb_explode_time();
+float gui_get_bomb_explode_radius();
+
 // Terrain draw mode
 namespace TerrainDraw
 {

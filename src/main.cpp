@@ -172,7 +172,14 @@ static void draw_quadtree_leaf_cells(const Quadtree* terrain, bool show_quadtree
 
 // Spawn bomb
 void spawnBomb(float x, float y, AppContext& app) {
-    app.bombs.emplace_back(x, y, 10.0f, 10.0f, app);
+    float radius = gui_get_bomb_radius();
+    float explodeTime = gui_get_bomb_explode_time();
+    Bomb b(x, y, radius, explodeTime, app);
+    b.setGravity(gui_get_bomb_gravity());
+    b.setBounceStrength(gui_get_bomb_bounce());
+    b.setExplodeRadius(gui_get_bomb_explode_radius());
+    
+    app.bombs.push_back(b);
 }
 
 
@@ -479,10 +486,16 @@ void app_run(AppContext& app)
             }
         }
 
-        
-        
-        
-       
+        // Check for terrain destruction request from terrain window clicks
+        if (TerrainDestruct::has_destruction_request())
+        {
+            auto req = TerrainDestruct::get_and_clear_request();
+            if (app.terrain)
+            {
+                // Spawn bomb where clicked in terrain window
+                spawnBomb(req.world_x, req.world_y, app);
+            }
+        }
 
         // Start ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
