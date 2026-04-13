@@ -1,12 +1,40 @@
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_opengl.h>
+
 #include "imgui.h"
 
 #include "gui.h"
 #include "terrain.h"
 #include <filesystem>
 
+
+
+
+
 // Global console buffer storage
 static std::string g_console_output;
 std::queue<std::string> ConsoleBuffer::s_command_queue;
+
+
+// Application context structure
+struct AppContext
+{
+    SDL_Window* window;
+    SDL_GLContext gl_context;
+    std::unique_ptr<Quadtree> terrain;
+    std::string loaded_terrain_file;
+    int loaded_terrain_depth;
+    int last_depth_reload_attempt;
+    
+    // Cached world bounds for coordinate transformation
+    float world_min_x = 0.0f;
+    float world_max_x = 0.0f;
+    float world_min_y = 0.0f;
+    float world_max_y = 0.0f;
+
+    std::vector<Bomb> bombs;
+};
+
 
 std::string& ConsoleBuffer::get_output()
 {
@@ -138,7 +166,7 @@ ImVec4 gui_get_terrain_air_color()
     return g_terrain_air_color;
 }
 
-void gui_render()
+void gui_render(AppContext& app)
 {
     // Keep a rolling history of FPS for plotting.
     // (Static storage keeps it simple and avoids allocations.)
@@ -156,6 +184,14 @@ void gui_render()
         ImGui::ShowDemoWindow(&show_demo_window);
     }
 
+    ImDrawList* draw = ImGui::GetBackgroundDrawList();
+
+    for (auto& bomb : app.bombs) {
+            if (bomb.isActive()) {
+                bomb.update(1.0f / 60.0f);
+                bomb.draw(draw);
+            }
+        }   
     // Sample control panel
     ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(360, 360), ImGuiCond_FirstUseEver);

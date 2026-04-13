@@ -17,8 +17,15 @@
 #include "backends/imgui_impl_opengl3.h"
 #include "gui.h"
 #include "terrain.h"
+#include "bomb.h"
+#include "appcontext.h"
 
 void gui_render();
+
+
+
+
+
 
 // Application context structure
 struct AppContext
@@ -35,6 +42,8 @@ struct AppContext
     float world_max_x = 0.0f;
     float world_min_y = 0.0f;
     float world_max_y = 0.0f;
+
+    std::vector<Bomb> bombs;
 };
 
 static std::vector<std::string> split_ws(const std::string& s)
@@ -169,6 +178,12 @@ static void draw_quadtree_leaf_cells(const Quadtree* terrain, bool show_quadtree
         }
     }
 }
+
+// Spawn bomb
+void spawnBomb(float x, float y) {
+    bombs.emplace_back(x, y, 10.0f);
+}
+
 
 // Forward declarations
 bool app_init(AppContext& app);
@@ -312,6 +327,9 @@ void app_run(AppContext& app)
                             float world_x, world_y;
                             screen_to_world((float)event.button.x, (float)event.button.y, app, world_x, world_y);
                             
+                            // spawn bomb at click
+                            spawnBomb(world_x, world_y);
+
                             float brush_radius = gui_get_brush_radius();
                             //call setcircle here
                             
@@ -418,6 +436,16 @@ void app_run(AppContext& app)
                 }
             }
         }
+
+        
+        
+        for (auto& bomb : bombs) {
+            if (bomb.isActive()) {
+                bomb.update(1.0f / 60.0f);
+                bomb.draw(draw);
+            }
+        }
+       
 
         // Start ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
