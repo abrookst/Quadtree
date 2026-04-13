@@ -10,6 +10,9 @@
 
 struct ImVec4;
 
+// Forward declaration
+class Quadtree;
+
 // Console buffer for capturing cout
 class ConsoleBuffer : public std::streambuf
 {
@@ -32,11 +35,21 @@ void gui_render();
 // Debug overlay toggle (set via ImGui)
 bool gui_get_show_quadtree_overlay();
 
+// Set current terrain for display in terrain window
+void gui_set_current_terrain(const Quadtree* terrain);
+
+// Set terrain display resolution (called when terrain is loaded)
+void gui_set_terrain_resolution(int width, int height);
+
 // Terrain build parameter (controlled via ImGui)
 int gui_get_max_depth();
 
 // Brush radius for circle destruction (controlled via ImGui)
 float gui_get_brush_radius();
+
+// Terrain window display resolution (controlled via ImGui)
+int gui_get_terrain_display_width();
+int gui_get_terrain_display_height();
 
 // Visualization colors (controlled via ImGui)
 ImVec4 gui_get_terrain_solid_color();
@@ -83,6 +96,26 @@ namespace TerrainDraw
     void clear_reload_request();
     std::string get_reload_file();
     bool is_reload_from_draw();
+}
+
+// Terrain destruction request system
+namespace TerrainDestruct
+{
+    // Store a destruction request at world coordinates
+    void request_destruction(float world_x, float world_y, float radius);
+    
+    // Check if there's a pending destruction request
+    bool has_destruction_request();
+    
+    // Get and clear the destruction request
+    struct DestructionRequest
+    {
+        float world_x;
+        float world_y;
+        float radius;
+    };
+    
+    DestructionRequest get_and_clear_request();
 }
 
 #endif // GUI_H

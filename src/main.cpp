@@ -5,6 +5,7 @@
 #include <memory>
 #include <sstream>
 #include <vector>
+#include <filesystem>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -17,7 +18,6 @@
 #include "backends/imgui_impl_opengl3.h"
 #include "gui.h"
 #include "terrain.h"
-
 void gui_render();
 
 // Application context structure
@@ -216,7 +216,7 @@ bool app_init(AppContext& app)
             SDL_WINDOWPOS_CENTERED,
             SDL_WINDOWPOS_CENTERED,
             1280, 720,
-            SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN
+            SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
         );
 
         if (!app.window)
@@ -255,15 +255,28 @@ bool app_init(AppContext& app)
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGuiIO& io = ImGui::GetIO();
-        // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;  // Docking disabled
+        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;  // Enable docking
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable keyboard navigation
 
         // Setup Dear ImGui style
-        ImGui::StyleColorsDark();
+        ImGui::StyleColorsClassic();
+        
+        ImGuiStyle& style = ImGui::GetStyle();
+        style.FrameRounding = 12.0f;
+        style.WindowBorderSize = 1.0f;
 
         // Setup Platform/Renderer backends
         const char* glsl_version = "#version 330";
         ImGui_ImplSDL2_InitForOpenGL(app.window, app.gl_context);
         ImGui_ImplOpenGL3_Init(glsl_version);
+        
+        // Load default layout from src directory
+        std::filesystem::path exe_dir = std::filesystem::current_path();
+        std::filesystem::path layout_file = exe_dir.parent_path().parent_path() / "src" / "defaultlayout.ini";
+        std::cout << "[DEBUG] Current working directory: " << exe_dir << std::endl;
+        std::cout << "[DEBUG] Attempting to load layout from: " << layout_file << std::endl;
+        ImGui::LoadIniSettingsFromDisk(layout_file.string().c_str());
+        
         std::cout << "[OK] ImGui initialized" << std::endl;
         std::cout << "\n[RUN] ============================================" << std::endl;
         std::cout << "[RUN]  Application Running" << std::endl;
@@ -344,6 +357,7 @@ void app_run(AppContext& app)
                 std::cout << "  quit | exit               - Quit the application" << std::endl;
                 std::cout << "  terrain_load <file>       - Load a bitmap terrain file" << std::endl;
                 std::cout << "                              (uses GUI Max Depth)" << std::endl;
+                std::cout << "  terrain_clear             - Clear the current terrain" << std::endl;
             }
             else if (!args.empty() && args[0] == "terrain_load")
             {
@@ -361,8 +375,32 @@ void app_run(AppContext& app)
                     app.loaded_terrain_file = file;
                     app.loaded_terrain_depth = gui_get_max_depth();
                     app.last_depth_reload_attempt = app.loaded_terrain_depth;
+                    
+                    // Set display resolution to bitmap dimensions
+                    int bmp_width, bmp_height;
+                    std::string dim_error;
+                    if (terrain_get_bitmap_dimensions(file, bmp_width, bmp_height, dim_error))
+                    {
+                        gui_set_terrain_resolution(bmp_width, bmp_height);
+                    }
+                    
                     std::cout << "[TERRAIN] Loaded bitmap into quadtree: nodes=" << app.terrain->get_node_count()
                               << " depth=" << app.terrain->get_depth() << std::endl;
+                }
+            }
+            else if (!args.empty() && args[0] == "terrain_clear")
+            {
+                if (app.terrain)
+                {
+                    int terrain_w = gui_get_terrain_display_width();
+                    int terrain_h = gui_get_terrain_display_height();
+                    const Bounds bounds(0.0f, 0.0f, static_cast<float>(terrain_w), static_cast<float>(terrain_h));
+                    app.terrain = std::make_unique<Quadtree>(bounds, gui_get_max_depth(), false);
+                    std::cout << "[TERRAIN] Terrain cleared" << std::endl;
+                }
+                else
+                {
+                    std::cout << "[TERRAIN] No terrain to clear" << std::endl;
                 }
             }
             else
@@ -394,6 +432,10 @@ void app_run(AppContext& app)
                     app.loaded_terrain_file = "[drawn]";
                     app.loaded_terrain_depth = gui_get_max_depth();
                     app.last_depth_reload_attempt = app.loaded_terrain_depth;
+                    
+                    // Set display resolution to draw bitmap dimensions
+                    gui_set_terrain_resolution(draw_bmp.width, draw_bmp.height);
+                    
                     std::cout << "[TERRAIN] Loaded drawn terrain into quadtree: nodes=" << app.terrain->get_node_count()
                               << " depth=" << app.terrain->get_depth() << std::endl;
                 }
@@ -413,9 +455,30 @@ void app_run(AppContext& app)
                     app.loaded_terrain_file = file;
                     app.loaded_terrain_depth = gui_get_max_depth();
                     app.last_depth_reload_attempt = app.loaded_terrain_depth;
+                    
+                    // Set display resolution to bitmap dimensions
+                    int bmp_width, bmp_height;
+                    std::string dim_error;
+                    if (terrain_get_bitmap_dimensions(file, bmp_width, bmp_height, dim_error))
+                    {
+                        gui_set_terrain_resolution(bmp_width, bmp_height);
+                    }
+                    
                     std::cout << "[TERRAIN] Loaded drawn terrain into quadtree: nodes=" << app.terrain->get_node_count()
                               << " depth=" << app.terrain->get_depth() << std::endl;
                 }
+            }
+        }
+
+        // Check for terrain destruction request from terrain window clicks
+        if (TerrainDestruct::has_destruction_request())
+        {
+            auto req = TerrainDestruct::get_and_clear_request();
+            if (app.terrain)
+            {
+                std::cout << "[ACTION] Destroyed circle at (" << req.world_x << ", " << req.world_y 
+                          << ") with radius " << req.radius << std::endl;
+                app.terrain->set_circle(req.radius, req.world_x, req.world_y);
             }
         }
 
@@ -423,6 +486,9 @@ void app_run(AppContext& app)
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
+
+        // Set current terrain for GUI display
+        gui_set_current_terrain(app.terrain.get());
 
         // Render GUI
         gui_render();
@@ -452,13 +518,15 @@ void app_run(AppContext& app)
             }
         }
 
-        // Draw terrain into the main viewport (background)
-        const ImVec4 solid_col = gui_get_terrain_solid_color();
-        draw_quadtree_leaf_cells(
-            app.terrain.get(),
-            gui_get_show_quadtree_overlay(),
-            ImGui::ColorConvertFloat4ToU32(solid_col),
-            app);
+        // Update world bounds for coordinate transformation (needed for click detection)
+        if (app.terrain && app.terrain->get_root())
+        {
+            const Bounds& b = app.terrain->get_root()->get_bounds();
+            app.world_min_x = b.get_min_x();
+            app.world_max_x = b.get_max_x();
+            app.world_min_y = b.get_min_y();
+            app.world_max_y = b.get_max_y();
+        }
 
         // Rendering
         ImGui::Render();

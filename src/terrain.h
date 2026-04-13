@@ -30,4 +30,11 @@ bool terrain_save_bitmap_file(
     int height,
     std::string& out_error);
 
+// Get bitmap file dimensions without loading full data
+bool terrain_get_bitmap_dimensions(
+    const std::string& filename,
+    int& out_width,
+    int& out_height,
+    std::string& out_error);
+
 #endif // TERRAIN_H
