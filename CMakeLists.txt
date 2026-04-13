@@ -73,6 +73,7 @@ set(SOURCES
     src/gui.cpp
     src/quadtree.cpp
     src/terrain.cpp
+    src/bomb.cpp
     ${IMGUI_SOURCES}
 )
 
