@@ -8,6 +8,9 @@
 #include <vector>
 #include <cstdint>
 
+#include "bomb.h"
+#include "appcontext.h"
+
 struct ImVec4;
 
 // Console buffer for capturing cout
@@ -27,7 +30,7 @@ private:
 };
 
 // GUI rendering function
-void gui_render();
+void gui_render(AppContext& app);
 
 // Debug overlay toggle (set via ImGui)
 bool gui_get_show_quadtree_overlay();

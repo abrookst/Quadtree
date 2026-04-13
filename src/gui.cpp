@@ -5,6 +5,8 @@
 
 #include "gui.h"
 #include "terrain.h"
+#include "bomb.h"
+#include "appcontext.h"
 #include <filesystem>
 
 
@@ -16,24 +18,6 @@ static std::string g_console_output;
 std::queue<std::string> ConsoleBuffer::s_command_queue;
 
 
-// Application context structure
-struct AppContext
-{
-    SDL_Window* window;
-    SDL_GLContext gl_context;
-    std::unique_ptr<Quadtree> terrain;
-    std::string loaded_terrain_file;
-    int loaded_terrain_depth;
-    int last_depth_reload_attempt;
-    
-    // Cached world bounds for coordinate transformation
-    float world_min_x = 0.0f;
-    float world_max_x = 0.0f;
-    float world_min_y = 0.0f;
-    float world_max_y = 0.0f;
-
-    std::vector<Bomb> bombs;
-};
 
 
 std::string& ConsoleBuffer::get_output()

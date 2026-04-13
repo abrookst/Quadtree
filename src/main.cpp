@@ -20,31 +20,14 @@
 #include "bomb.h"
 #include "appcontext.h"
 
-void gui_render();
+
+
+
+AppContext app;
 
 
 
 
-
-
-// Application context structure
-struct AppContext
-{
-    SDL_Window* window;
-    SDL_GLContext gl_context;
-    std::unique_ptr<Quadtree> terrain;
-    std::string loaded_terrain_file;
-    int loaded_terrain_depth;
-    int last_depth_reload_attempt;
-    
-    // Cached world bounds for coordinate transformation
-    float world_min_x = 0.0f;
-    float world_max_x = 0.0f;
-    float world_min_y = 0.0f;
-    float world_max_y = 0.0f;
-
-    std::vector<Bomb> bombs;
-};
 
 static std::vector<std::string> split_ws(const std::string& s)
 {
@@ -180,8 +163,8 @@ static void draw_quadtree_leaf_cells(const Quadtree* terrain, bool show_quadtree
 }
 
 // Spawn bomb
-void spawnBomb(float x, float y) {
-    bombs.emplace_back(x, y, 10.0f);
+void spawnBomb(float x, float y, AppContext& app) {
+    app.bombs.emplace_back(x, y, 10.0f, 10.0f, app);
 }
 
 
@@ -328,14 +311,14 @@ void app_run(AppContext& app)
                             screen_to_world((float)event.button.x, (float)event.button.y, app, world_x, world_y);
                             
                             // spawn bomb at click
-                            spawnBomb(world_x, world_y);
+                            spawnBomb((float)event.button.x, (float)event.button.y, app);
 
                             float brush_radius = gui_get_brush_radius();
                             //call setcircle here
                             
-                            std::cout << "[ACTION] Destroyed circle at (" << world_x << ", " << world_y 
-                                      << ") with radius " << brush_radius << std::endl;
-                            app.terrain->set_circle(brush_radius, world_x, world_y);
+                            //std::cout << "[ACTION] Destroyed circle at (" << world_x << ", " << world_y 
+                            //          << ") with radius " << brush_radius << std::endl;
+                            //app.terrain->set_circle(brush_radius, world_x, world_y);
                         }
                     }
                     
@@ -439,12 +422,7 @@ void app_run(AppContext& app)
 
         
         
-        for (auto& bomb : bombs) {
-            if (bomb.isActive()) {
-                bomb.update(1.0f / 60.0f);
-                bomb.draw(draw);
-            }
-        }
+        
        
 
         // Start ImGui frame
@@ -453,7 +431,7 @@ void app_run(AppContext& app)
         ImGui::NewFrame();
 
         // Render GUI
-        gui_render();
+        gui_render(app);
 
         // If the depth slider changes, rebuild the quadtree by reloading the last loaded file.
         const int requested_depth = gui_get_max_depth();

@@ -1,13 +1,17 @@
 #pragma once
 
 #include "imgui.h"
+#include "quadtree.h"
+
+
+class AppContext;
 
 class Bomb {
 
 public:
 
     // Constructor
-    Bomb(float x, float y, float radius);
+    Bomb(float x, float y, float radius, float explodeTime, AppContext& app);
 
     // Update physics
     void update(float dt);
@@ -28,6 +32,18 @@ public:
     // Check if it exists in the level
     bool isActive() const;
 
+    // Helper function to convert screen pos to world pos
+    void screen_to_world(float screen_x, float screen_y, float& out_world_x, float& out_world_y);
+
+    // Collision Resolver
+    void resolveTerrainCollision();
+
+    // Collision Handler
+    void handleCollision();
+
+    // Calculate Normal
+    void computeTerrainNormal(float& nx, float& ny);
+
 private:
 
     // position
@@ -44,7 +60,19 @@ private:
     // physics
     float bounceStrength;
 
-    static constexpr float gravity = 980.0f;
+    static constexpr float gravity = 98.0f;
+
+    float explodeTime;
+
+    float lifeTimer;
+
+    Quadtree* terrain;
+
+    float world_min_x = 0.0f;
+    float world_max_x = 0.0f;
+    float world_min_y = 0.0f;
+    float world_max_y = 0.0f;
+
 
     // active state
     bool active;
