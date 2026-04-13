@@ -24,5 +24,6 @@ _deps/
 *.a
 *.o
 *.so
+*.bitmap
 .DS_Store
 imgui.ini

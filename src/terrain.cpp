@@ -314,3 +314,51 @@ bool terrain_build_quadtree_from_bitmap(
     out_tree = std::move(tree);
     return true;
 }
+
+bool terrain_get_bitmap_dimensions(
+    const std::string& filename,
+    int& out_width,
+    int& out_height,
+    std::string& out_error)
+{
+    out_error.clear();
+    out_width = 0;
+    out_height = 0;
+
+    std::ifstream in;
+    std::string opened_path;
+    if (!open_terrain_file(in, filename, out_error))
+    {
+        out_error = "Failed to open terrain file: " + filename;
+        return false;
+    }
+
+    // Parse just the header to get dimensions
+    std::string line;
+    while (std::getline(in, line))
+    {
+        line = trim_copy(strip_inline_comment(line));
+        if (line.empty()) continue;
+
+        auto tokens = split_ws(line);
+        if (tokens.size() < 2)
+        {
+            out_error = "Invalid bitmap header";
+            return false;
+        }
+
+        out_width = std::stoi(tokens[0]);
+        out_height = std::stoi(tokens[1]);
+
+        if (out_width <= 0 || out_height <= 0)
+        {
+            out_error = "Invalid dimensions";
+            return false;
+        }
+
+        return true;
+    }
+
+    out_error = "No bitmap header found";
+    return false;
+}
