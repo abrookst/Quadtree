@@ -174,7 +174,7 @@ static void draw_quadtree_leaf_cells(const Quadtree* terrain, bool show_quadtree
 void spawnBomb(float x, float y, AppContext& app) {
     float radius = gui_get_bomb_radius();
     float explodeTime = gui_get_bomb_explode_time();
-    Bomb b(x, y, radius, explodeTime, app);
+    Bomb b(x, y, radius, false, explodeTime, 3, app);
     b.setGravity(gui_get_bomb_gravity());
     b.setBounceStrength(gui_get_bomb_bounce());
     b.setExplodeRadius(gui_get_bomb_explode_radius());

@@ -11,7 +11,7 @@ class Bomb {
 public:
 
     // Constructor
-    Bomb(float x, float y, float radius, float explodeTime, AppContext& app);
+    Bomb(float x, float y, float radius, bool timedExplosion, float explodeTime, int hitsToExplode, AppContext& app);
 
     // Update physics
     void update(float dt);
@@ -71,8 +71,12 @@ private:
 
     float gravity;
 
+    bool timedExplosion;
+
     float explodeTime;
     float explodeRadius = 10.0f;
+
+    int hitsToExplode;
 
     float lifeTimer;
 

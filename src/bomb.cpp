@@ -4,7 +4,7 @@
 #include <iostream>
 
 // Constructor 
-Bomb::Bomb(float x, float y, float radius, float explodeTime, AppContext& app) 
+Bomb::Bomb(float x, float y, float radius, bool timedExplosion, float explodeTime, int hitsToExplode, AppContext& app) 
   : x(x),
     y(y),
     vx(0.0f),
@@ -13,7 +13,9 @@ Bomb::Bomb(float x, float y, float radius, float explodeTime, AppContext& app)
     bounceStrength(0.5f),
     gravity(98.0f),
     active(true),
+    timedExplosion(timedExplosion),
     explodeTime(explodeTime),
+    hitsToExplode(hitsToExplode),
     lifeTimer(0.0f),
     terrain(app.terrain.get()),
     world_max_x(app.world_max_x),
@@ -37,7 +39,7 @@ void Bomb::update(float dt) {
 
     lifeTimer = lifeTimer + dt;
 
-    if (lifeTimer > explodeTime) {
+    if (lifeTimer > explodeTime && timedExplosion) {
         std::cout << "[BOMB] Explode!" << std::endl;
         explode();
     }
@@ -121,6 +123,14 @@ void Bomb::resolveTerrainCollision() {
             if (terrain->is_filled(px, py)) {
                 std::cout << "[BOMB] Collision event!" << std::endl;
                 
+                if (!timedExplosion) {
+                    hitsToExplode--;
+
+                    if (hitsToExplode <= 0) {
+                        explode();
+                    }
+                }
+
                 collided = true;
                 break;
             }
