@@ -77,6 +77,7 @@ private:
     float explodeRadius = 10.0f;
 
     int hitsToExplode;
+    int startHits;
 
     float lifeTimer;
 
