@@ -57,6 +57,8 @@ int gui_get_terrain_display_height();
 // Visualization colors (controlled via ImGui)
 ImVec4 gui_get_terrain_solid_color();
 ImVec4 gui_get_terrain_air_color();
+ImVec4 gui_get_bomb_trail_color();
+ImVec4 gui_get_parabola_color();
 
 // Bomb Settings
 float gui_get_bomb_radius();
@@ -66,7 +68,10 @@ float gui_get_bomb_explode_time();
 float gui_get_bomb_explode_radius();
 bool gui_get_bomb_timed_explosion();
 int gui_get_bomb_hits_to_explode();
-ImVec4 gui_get_bomb_trail_color();
+
+// Spawn character mode
+bool gui_get_spawn_character_mode();
+void gui_set_spawn_character_mode(bool mode);
 
 // Terrain draw mode
 namespace TerrainDraw

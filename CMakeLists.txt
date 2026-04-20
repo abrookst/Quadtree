@@ -74,6 +74,7 @@ set(SOURCES
     src/quadtree.cpp
     src/terrain.cpp
     src/bomb.cpp
+    src/player.cpp
     ${IMGUI_SOURCES}
 )
 

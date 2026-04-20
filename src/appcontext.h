@@ -8,6 +8,8 @@
 #include "quadtree.h"
 #include "bomb.h"
 
+class Player;
+
 // Application context structure
 struct AppContext
 {
@@ -25,4 +27,5 @@ struct AppContext
     float world_max_y = 0.0f;
 
     std::vector<Bomb> bombs;
+    std::unique_ptr<Player> player;
 };

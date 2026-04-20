@@ -7,6 +7,7 @@
 #include "gui.h"
 #include "terrain.h"
 #include "bomb.h"
+#include "player.h"
 #include "appcontext.h"
 #include <filesystem>
 
@@ -208,6 +209,7 @@ int gui_get_terrain_display_height()
     static bool bomb_timed_explosion = false;
     static int bomb_hits_to_explode = 3;
     static ImVec4 bomb_trail_color = ImVec4(0.78f, 0.78f, 0.78f, 0.59f); // approx 200, 200, 200, 150
+    static ImVec4 parabola_color = ImVec4(1.0f, 1.0f, 0.0f, 0.78f); // YELLOW / approx 255, 255, 0, 200
 
 float gui_get_bomb_radius() { return bomb_radius; }
 float gui_get_bomb_gravity() { return bomb_gravity; }
@@ -217,6 +219,11 @@ float gui_get_bomb_explode_radius() { return bomb_explode_radius; }
 bool gui_get_bomb_timed_explosion() { return bomb_timed_explosion; }
 int gui_get_bomb_hits_to_explode() { return bomb_hits_to_explode; }
 ImVec4 gui_get_bomb_trail_color() { return bomb_trail_color; }
+ImVec4 gui_get_parabola_color() { return parabola_color; }
+
+static bool g_spawn_character_mode = false;
+bool gui_get_spawn_character_mode() { return g_spawn_character_mode; }
+void gui_set_spawn_character_mode(bool mode) { g_spawn_character_mode = mode; }
 
 ImVec4 gui_get_terrain_solid_color()
 {
@@ -312,8 +319,10 @@ void gui_render(AppContext& app)
         
         ImGui::Spacing();
         ImGui::Text("Colors");
-        ImGui::ColorEdit3("Solid (Terrain)", (float*)&g_terrain_solid_color);
-        ImGui::ColorEdit3("Air", (float*)&g_terrain_air_color);
+        ImGui::ColorEdit3("Terrain Solid Color", (float*)&g_terrain_solid_color);
+        ImGui::ColorEdit3("Terrain Air Color", (float*)&g_terrain_air_color);
+        ImGui::ColorEdit4("Bomb Trail Color", (float*)&bomb_trail_color);
+        ImGui::ColorEdit4("Aim Parabola Color", (float*)&parabola_color);
         ImGui::Spacing();
     }
 
@@ -337,8 +346,19 @@ void gui_render(AppContext& app)
         } else {
             ImGui::SliderInt("Hits required", &bomb_hits_to_explode, 1, 10);
         }
-        
-        ImGui::ColorEdit4("Trail Color", (float*)&bomb_trail_color);
+
+        ImGui::Separator();
+        if (gui_get_spawn_character_mode()) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.7f, 0.2f, 1.0f));
+            if (ImGui::Button("Next Click: Spawning Character")) {
+                gui_set_spawn_character_mode(false); // cancel
+            }
+            ImGui::PopStyleColor();
+        } else {
+            if (ImGui::Button("Spawn Character")) {
+                gui_set_spawn_character_mode(true);
+            }
+        }
         
         ImGui::PopItemWidth();
         ImGui::Spacing();
@@ -579,7 +599,7 @@ void gui_render(AppContext& app)
             ImGui::InvisibleButton("terrain_canvas", ImVec2(canvas_width, canvas_height));
             
             // Handle left-click for destruction
-            if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            if (ImGui::IsItemHovered())
             {
                 ImGuiIO& io = ImGui::GetIO();
                 ImVec2 mouse_pos = io.MousePos;
@@ -594,9 +614,63 @@ void gui_render(AppContext& app)
                 
                 float world_x = world_min_x + norm_x * range_x;
                 float world_y = world_max_y - norm_y * range_y;
-                
-                float brush_radius = gui_get_brush_radius();
-                TerrainDestruct::request_destruction(world_x, world_y, brush_radius);
+
+                // Draw prediction parabola if player exists and not spawning character
+                if (app.player && app.player->isActive() && !gui_get_spawn_character_mode()) {
+                    float px = app.player->getX();
+                    float py = app.player->getY();
+                    float T = 1.0f; // 1 second flight time to reach mouse
+                    float g = gui_get_bomb_gravity();
+                    float vx = (world_x - px) / T;
+                    float vy = (world_y - py + 0.5f * g * T * T) / T;
+
+                    // Draw dotted line until hitting ground
+                    ImVec4 p_col = gui_get_parabola_color();
+                    ImU32 p_col32 = IM_COL32((int)(p_col.x * 255), (int)(p_col.y * 255), (int)(p_col.z * 255), (int)(p_col.w * 255));
+                    
+                    float t = 0.0f;
+                    float dt = 0.05f;
+                    bool hit_ground = false;
+                    float sim_x = px;
+                    float sim_y = py;
+
+                    while (!hit_ground && t < 10.0f) { // cap at 10s simulation
+                        sim_x = px + vx * t;
+                        sim_y = py + vy * t - 0.5f * g * t * t;
+                        
+                        // Check out of bounds or ground hit
+                        if (sim_x < world_min_x || sim_x > world_max_x || sim_y < world_min_y) {
+                            break;
+                        }
+                        
+                        if (app.terrain && app.terrain->is_filled(sim_x, sim_y)) {
+                            hit_ground = true;
+                            // Draw an X where it hit
+                            ImVec2 hit_pos = world_to_screen(sim_x, sim_y);
+                            float x_size = 5.0f; // 5 pixels
+                            draw_list->AddLine(ImVec2(hit_pos.x - x_size, hit_pos.y - x_size), 
+                                               ImVec2(hit_pos.x + x_size, hit_pos.y + x_size), p_col32, 2.0f);
+                            draw_list->AddLine(ImVec2(hit_pos.x - x_size, hit_pos.y + x_size), 
+                                               ImVec2(hit_pos.x + x_size, hit_pos.y - x_size), p_col32, 2.0f);
+                            break;
+                        }
+
+                        // Draw a dot every few steps if within bounds
+                        if (sim_y <= world_max_y) {
+                            ImVec2 dot_pos = world_to_screen(sim_x, sim_y);
+                            // Only draw a dot every couple iterations for dotted effect, or just draw every iteration
+                            // Since dt is 0.05f, we get nice spacing.
+                            draw_list->AddCircleFilled(dot_pos, 2.0f, p_col32);
+                        }
+                        
+                        t += dt;
+                    }
+                }
+
+                if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                    float brush_radius = gui_get_brush_radius();
+                    TerrainDestruct::request_destruction(world_x, world_y, brush_radius);
+                }
             }
             
             // Draw active bombs using mapped screen coordinates
@@ -636,6 +710,14 @@ void gui_render(AppContext& app)
                         draw_list->AddLine(pLast, screen_pos, IM_COL32(tr, tg, tb, (int)base_a), 2.0f);
                     }
                 }
+            }
+
+            // Update and draw player
+            if (app.player && app.player->isActive()) {
+                app.player->update(1.0f / 60.0f);
+                ImVec2 screen_pos = world_to_screen(app.player->getX(), app.player->getY());
+                float zoom_x = canvas_width / range_x;
+                app.player->draw(draw_list, screen_pos, zoom_x);
             }
 
             // Reserve space for canvas

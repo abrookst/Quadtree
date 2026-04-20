@@ -18,6 +18,7 @@
 #include "backends/imgui_impl_opengl3.h"
 #include "gui.h"
 #include "terrain.h"
+#include "player.h"
 #include "bomb.h"
 #include "appcontext.h"
 
@@ -171,13 +172,14 @@ static void draw_quadtree_leaf_cells(const Quadtree* terrain, bool show_quadtree
 }
 
 // Spawn bomb
-void spawnBomb(float x, float y, AppContext& app) {
+void spawnBomb(float x, float y, AppContext& app, float vx = 0.0f, float vy = 0.0f) {
     float radius = gui_get_bomb_radius();
     float explodeTime = gui_get_bomb_explode_time();
     bool timedExplosion = gui_get_bomb_timed_explosion();
     int hitsToExplode = gui_get_bomb_hits_to_explode();
 
     Bomb b(x, y, radius, timedExplosion, explodeTime, hitsToExplode, app);
+    b.setVelocity(vx, vy);
     b.setGravity(gui_get_bomb_gravity());
     b.setBounceStrength(gui_get_bomb_bounce());
     b.setExplodeRadius(gui_get_bomb_explode_radius());
@@ -341,8 +343,13 @@ void app_run(AppContext& app)
                             float world_x, world_y;
                             screen_to_world((float)event.button.x, (float)event.button.y, app, world_x, world_y);
                             
-                            // spawn bomb at click
-                            spawnBomb((float)event.button.x, (float)event.button.y, app);
+                            if (gui_get_spawn_character_mode()) {
+                                app.player = std::make_unique<Player>(world_x, world_y, 10.0f, 10.0f, app);
+                                gui_set_spawn_character_mode(false);
+                            } else {
+                                // spawn bomb at click
+                                spawnBomb(world_x, world_y, app);
+                            }
 
                             float brush_radius = gui_get_brush_radius();
                             //call setcircle here
@@ -527,8 +534,23 @@ void app_run(AppContext& app)
             auto req = TerrainDestruct::get_and_clear_request();
             if (app.terrain)
             {
-                // Spawn bomb where clicked in terrain window
-                spawnBomb(req.world_x, req.world_y, app);
+                if (gui_get_spawn_character_mode()) {
+                    app.player = std::make_unique<Player>(req.world_x, req.world_y, 10.0f, 10.0f, app);
+                    gui_set_spawn_character_mode(false);
+                } else {
+                    if (app.player && app.player->isActive()) {
+                        float px = app.player->getX();
+                        float py = app.player->getY();
+                        float T = 1.0f; // 1 second flight time
+                        float g = gui_get_bomb_gravity();
+                        float vx = (req.world_x - px) / T;
+                        float vy = (req.world_y - py + 0.5f * g * T * T) / T;
+                        spawnBomb(px, py, app, vx, vy);
+                    } else {
+                        // Spawn bomb where clicked in terrain window
+                        spawnBomb(req.world_x, req.world_y, app);
+                    }
+                }
             }
         }
 
