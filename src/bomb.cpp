@@ -16,7 +16,9 @@ Bomb::Bomb(float x, float y, float radius, bool timedExplosion, float explodeTim
     timedExplosion(timedExplosion),
     explodeTime(explodeTime),
     hitsToExplode(hitsToExplode),
+    initialHitsToExplode(hitsToExplode),
     lifeTimer(0.0f),
+    trailTimer(0.0f),
     terrain(app.terrain.get()),
     world_max_x(app.world_max_x),
     world_max_y(app.world_max_y),
@@ -34,6 +36,34 @@ void Bomb::update(float dt) {
     x += vx * dt;
     y += vy * dt;
 
+    // Wall collision
+    bool wallCollided = false;
+    if (x - radius < world_min_x) {
+        x = world_min_x + radius;
+        vx = -vx * bounceStrength;
+        wallCollided = true;
+    } else if (x + radius > world_max_x) {
+        x = world_max_x - radius;
+        vx = -vx * bounceStrength;
+        wallCollided = true;
+    }
+    if (y - radius < world_min_y) {
+        y = world_min_y + radius;
+        vy = -vy * bounceStrength;
+        wallCollided = true;
+    } else if (y + radius > world_max_y) {
+        y = world_max_y - radius;
+        vy = -vy * bounceStrength;
+        wallCollided = true;
+    }
+
+    if (wallCollided && !timedExplosion) {
+        hitsToExplode--;
+        if (hitsToExplode <= 0) {
+            explode();
+        }
+    }
+
     // Terrain collision
     resolveTerrainCollision();
 
@@ -43,14 +73,31 @@ void Bomb::update(float dt) {
         std::cout << "[BOMB] Explode!" << std::endl;
         explode();
     }
+
+    // Trail logic
+    trailTimer += dt;
+    if (trailTimer > 0.05f) {
+        trailTimer = 0.0f;
+        trail.push_back({x, y});
+        if (trail.size() > 20) {
+            trail.erase(trail.begin());
+        }
+    }
 }
 
 // Draw bomb
 void Bomb::draw(ImDrawList* drawList, ImVec2 screenPos, float screenRadius) {
+    float runRatio = 0.0f;
+    if (timedExplosion) {
+        runRatio = lifeTimer / explodeTime;
+    } else {
+        runRatio = (float)(initialHitsToExplode - hitsToExplode) / (float)initialHitsToExplode;
+    }
+
     drawList->AddCircleFilled(
         screenPos,
         screenRadius,
-        IM_COL32(lifeTimer / explodeTime * 255, 100, 100, 255)
+        IM_COL32(runRatio * 255, 100, 100, 255)
     );
 }
 

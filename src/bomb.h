@@ -2,6 +2,8 @@
 
 #include "imgui.h"
 #include "quadtree.h"
+#include <vector>
+#include <utility>
 
 
 struct AppContext;
@@ -44,6 +46,9 @@ public:
     // Helper function to convert screen pos to world pos
     void screen_to_world(float screen_x, float screen_y, float& out_world_x, float& out_world_y);
 
+    // Get Trail
+    const std::vector<std::pair<float, float>>& getTrail() const { return trail; }
+
     // Collision Resolver
     void resolveTerrainCollision();
 
@@ -77,6 +82,7 @@ private:
     float explodeRadius = 10.0f;
 
     int hitsToExplode;
+    int initialHitsToExplode;
 
     float lifeTimer;
 
@@ -87,6 +93,8 @@ private:
     float world_min_y = 0.0f;
     float world_max_y = 0.0f;
 
+    std::vector<std::pair<float, float>> trail;
+    float trailTimer;
 
     // active state
     bool active;

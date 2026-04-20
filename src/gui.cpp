@@ -205,12 +205,18 @@ int gui_get_terrain_display_height()
     static float bomb_bounce = 0.5f;
     static float bomb_explode_time = 3.0f;
     static float bomb_explode_radius = 10.0f;
+    static bool bomb_timed_explosion = false;
+    static int bomb_hits_to_explode = 3;
+    static ImVec4 bomb_trail_color = ImVec4(0.78f, 0.78f, 0.78f, 0.59f); // approx 200, 200, 200, 150
 
 float gui_get_bomb_radius() { return bomb_radius; }
 float gui_get_bomb_gravity() { return bomb_gravity; }
 float gui_get_bomb_bounce() { return bomb_bounce; }
 float gui_get_bomb_explode_time() { return bomb_explode_time; }
 float gui_get_bomb_explode_radius() { return bomb_explode_radius; }
+bool gui_get_bomb_timed_explosion() { return bomb_timed_explosion; }
+int gui_get_bomb_hits_to_explode() { return bomb_hits_to_explode; }
+ImVec4 gui_get_bomb_trail_color() { return bomb_trail_color; }
 
 ImVec4 gui_get_terrain_solid_color()
 {
@@ -317,8 +323,23 @@ void gui_render(AppContext& app)
         ImGui::SliderFloat("Bomb Radius", &bomb_radius, 1.0f, 50.0f);
         ImGui::SliderFloat("Gravity", &bomb_gravity, 0.0f, 300.0f);
         ImGui::SliderFloat("Bounce Strength", &bomb_bounce, 0.0f, 2.0f);
-        ImGui::SliderFloat("Explosion Delay", &bomb_explode_time, 0.1f, 10.0f);
         ImGui::SliderFloat("Explosion Radius", &bomb_explode_radius, 1.0f, 100.0f);
+        
+        ImGui::Separator();
+        
+        bool timed = bomb_timed_explosion;
+        if (ImGui::RadioButton("Hits to Explode", !timed)) bomb_timed_explosion = false;
+        ImGui::SameLine();
+        if (ImGui::RadioButton("Time to Explode", timed)) bomb_timed_explosion = true;
+        
+        if (bomb_timed_explosion) {
+            ImGui::SliderFloat("Explosion Delay", &bomb_explode_time, 0.1f, 10.0f);
+        } else {
+            ImGui::SliderInt("Hits required", &bomb_hits_to_explode, 1, 10);
+        }
+        
+        ImGui::ColorEdit4("Trail Color", (float*)&bomb_trail_color);
+        
         ImGui::PopItemWidth();
         ImGui::Spacing();
     }
@@ -385,17 +406,29 @@ void gui_render(AppContext& app)
         
         // Command input
         static char input_buffer[256] = "";
-        ImGui::InputText("##command", input_buffer, IM_ARRAYSIZE(input_buffer), ImGuiInputTextFlags_EnterReturnsTrue);
+        static bool reclaim_focus = false;
+        
+        if (reclaim_focus) {
+            ImGui::SetKeyboardFocusHere(); // Focus the next item (InputText)
+            reclaim_focus = false;
+        }
+
+        bool submit_pressed = ImGui::InputText("##command", input_buffer, IM_ARRAYSIZE(input_buffer), ImGuiInputTextFlags_EnterReturnsTrue);
         
         ImGui::SameLine();
         if (ImGui::Button("Send"))
         {
-            if (input_buffer[0] != '\0')
-            {
+            submit_pressed = true;
+        }
+
+        if (submit_pressed)
+        {
+            if (input_buffer[0] != '\0') {
                 std::cout << "> " << input_buffer << std::endl;
                 ConsoleBuffer::submit_command(input_buffer);
                 input_buffer[0] = '\0';
             }
+            reclaim_focus = true;
         }
         
         ImGui::SameLine();
@@ -579,6 +612,29 @@ void gui_render(AppContext& app)
                     
                     // If bomb moves off screen, hide or draw it? Usually we just draw it!
                     bomb.draw(draw_list, screen_pos, screen_radius);
+
+                    // Draw trail
+                    const auto& trail = bomb.getTrail();
+                    if (trail.size() > 1) {
+                        ImVec4 bt_col = gui_get_bomb_trail_color();
+                        int tr = (int)(bt_col.x * 255.0f);
+                        int tg = (int)(bt_col.y * 255.0f);
+                        int tb = (int)(bt_col.z * 255.0f);
+                        float base_a = bt_col.w * 255.0f;
+
+                        for (size_t i = 0; i < trail.size() - 1; ++i) {
+                            ImVec2 p1 = world_to_screen(trail[i].first, trail[i].second);
+                            ImVec2 p2 = world_to_screen(trail[i + 1].first, trail[i + 1].second);
+                            
+                            // Calculate fade based on position in trail
+                            float alpha = (float)i / (float)trail.size();
+                            ImU32 trailColor = IM_COL32(tr, tg, tb, (int)(base_a * alpha));
+                            
+                            draw_list->AddLine(p1, p2, trailColor, 2.0f);
+                        }
+                        ImVec2 pLast = world_to_screen(trail.back().first, trail.back().second);
+                        draw_list->AddLine(pLast, screen_pos, IM_COL32(tr, tg, tb, (int)base_a), 2.0f);
+                    }
                 }
             }
 

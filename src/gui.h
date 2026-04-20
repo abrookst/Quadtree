@@ -64,6 +64,9 @@ float gui_get_bomb_gravity();
 float gui_get_bomb_bounce();
 float gui_get_bomb_explode_time();
 float gui_get_bomb_explode_radius();
+bool gui_get_bomb_timed_explosion();
+int gui_get_bomb_hits_to_explode();
+ImVec4 gui_get_bomb_trail_color();
 
 // Terrain draw mode
 namespace TerrainDraw

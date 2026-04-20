@@ -174,7 +174,10 @@ static void draw_quadtree_leaf_cells(const Quadtree* terrain, bool show_quadtree
 void spawnBomb(float x, float y, AppContext& app) {
     float radius = gui_get_bomb_radius();
     float explodeTime = gui_get_bomb_explode_time();
-    Bomb b(x, y, radius, false, explodeTime, 3, app);
+    bool timedExplosion = gui_get_bomb_timed_explosion();
+    int hitsToExplode = gui_get_bomb_hits_to_explode();
+
+    Bomb b(x, y, radius, timedExplosion, explodeTime, hitsToExplode, app);
     b.setGravity(gui_get_bomb_gravity());
     b.setBounceStrength(gui_get_bomb_bounce());
     b.setExplodeRadius(gui_get_bomb_explode_radius());
@@ -371,9 +374,41 @@ void app_run(AppContext& app)
                 std::cout << "[HELP] Available commands:" << std::endl;
                 std::cout << "  help                      - Show this help" << std::endl;
                 std::cout << "  quit | exit               - Quit the application" << std::endl;
+                std::cout << "  terrain_list              - Print all filenames in terrain folder" << std::endl;
                 std::cout << "  terrain_load <file>       - Load a bitmap terrain file" << std::endl;
                 std::cout << "                              (uses GUI Max Depth)" << std::endl;
                 std::cout << "  terrain_clear             - Clear the current terrain" << std::endl;
+            }
+            else if (!args.empty() && args[0] == "terrain_list")
+            {
+                std::cout << "[TERRAIN] Available terrain files:" << std::endl;
+                
+                std::filesystem::path dir("assets/terrain");
+                std::filesystem::path probe = std::filesystem::current_path();
+                bool found = false;
+                
+                for (int i = 0; i < 8; i++) {
+                    std::filesystem::path test_dir = probe / "assets" / "terrain";
+                    if (std::filesystem::exists(test_dir) && std::filesystem::is_directory(test_dir)) {
+                        dir = test_dir;
+                        found = true;
+                        break;
+                    }
+                    if (!probe.has_parent_path()) break;
+                    std::filesystem::path parent = probe.parent_path();
+                    if (parent == probe) break;
+                    probe = parent;
+                }
+                
+                if (found) {
+                    for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+                        if (entry.is_regular_file() && entry.path().extension() == ".bitmap") {
+                            std::cout << "  " << entry.path().filename().string() << std::endl;
+                        }
+                    }
+                } else {
+                    std::cout << "  [ERROR] Directory 'assets/terrain' not found." << std::endl;
+                }
             }
             else if (!args.empty() && args[0] == "terrain_load")
             {
