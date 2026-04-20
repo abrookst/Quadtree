@@ -16,7 +16,7 @@ Bomb::Bomb(float x, float y, float radius, bool timedExplosion, float explodeTim
     timedExplosion(timedExplosion),
     explodeTime(explodeTime),
     hitsToExplode(hitsToExplode),
-    initialHitsToExplode(hitsToExplode),
+    startHits(hitsToExplode),
     lifeTimer(0.0f),
     trailTimer(0.0f),
     terrain(app.terrain.get()),
@@ -87,18 +87,18 @@ void Bomb::update(float dt) {
 
 // Draw bomb
 void Bomb::draw(ImDrawList* drawList, ImVec2 screenPos, float screenRadius) {
-    float runRatio = 0.0f;
     if (timedExplosion) {
-        runRatio = lifeTimer / explodeTime;
+        drawList->AddCircleFilled(
+            screenPos,
+            screenRadius,
+            IM_COL32(lifeTimer / explodeTime * 255, 100, 100, 255));
     } else {
-        runRatio = (float)(initialHitsToExplode - hitsToExplode) / (float)initialHitsToExplode;
+        float ratio = (float)(startHits - hitsToExplode) / (float)startHits;
+        drawList->AddCircleFilled(
+            screenPos,
+            screenRadius,
+            IM_COL32(ratio * 255, 100, 100, 255));
     }
-
-    drawList->AddCircleFilled(
-        screenPos,
-        screenRadius,
-        IM_COL32(runRatio * 255, 100, 100, 255)
-    );
 }
 
 // Set velocity
