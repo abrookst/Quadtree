@@ -5,6 +5,8 @@
 #include <string>
 #include <math.h>
 #include <stdbool.h>
+#include <vector>
+#include <glm/glm.hpp>
 
 // 2D bounding rectangle
 struct Bounds
@@ -70,6 +72,10 @@ struct Bounds
     float get_max_x() const { return x + half_width; }
     float get_min_y() const { return y - half_height; }
     float get_max_y() const { return y + half_height; }
+
+    // Polygon collision detection
+    bool intersects_polygon(const std::vector<glm::vec2>& polygon) const;
+    bool fully_contained_by_polygon(const std::vector<glm::vec2>& polygon) const;
 };
 
 enum class FillState
@@ -111,6 +117,9 @@ public:
     // call set_circle on nodes
     void set_circle(float radius, float x, float y);
 
+    // call set_polygon on nodes
+    void set_polygon(const std::vector<glm::vec2>& polygon);
+
     // Clear the tree
     void clear();
 
@@ -138,6 +147,9 @@ public:
     
     // fills in the circle
     void set_circle(float radius, float x, float y);
+
+    // fills in the polygon
+    void set_polygon(const std::vector<glm::vec2>& polygon);
 
     
     const Bounds& get_bounds() const { return bounds_; }

@@ -55,6 +55,163 @@ void QuadtreeNode::set_circle(float radius, float x, float y) {
     try_collapse();
 }
 
+// Helper function: Point-in-polygon test using ray casting algorithm
+static bool point_in_polygon(float px, float py, const std::vector<glm::vec2>& polygon) {
+    if (polygon.size() < 3) return false;
+    
+    int intersections = 0;
+    for (size_t i = 0; i < polygon.size(); ++i) {
+        const glm::vec2& p1 = polygon[i];
+        const glm::vec2& p2 = polygon[(i + 1) % polygon.size()];
+        
+        if ((p1.y <= py && py < p2.y) || (p2.y <= py && py < p1.y)) {
+            float t = (py - p1.y) / (p2.y - p1.y);
+            float x_intersect = p1.x + t * (p2.x - p1.x);
+            if (px < x_intersect) {
+                intersections++;
+            }
+        }
+    }
+    
+    return (intersections % 2) == 1;
+}
+
+// Helper function: Distance from point to line segment
+static float point_to_segment_distance(float px, float py, const glm::vec2& p1, const glm::vec2& p2) {
+    float dx = p2.x - p1.x;
+    float dy = p2.y - p1.y;
+    float len_sq = dx * dx + dy * dy;
+    
+    if (len_sq == 0) {
+        float dpx = px - p1.x;
+        float dpy = py - p1.y;
+        return std::sqrt(dpx * dpx + dpy * dpy);
+    }
+    
+    float t = ((px - p1.x) * dx + (py - p1.y) * dy) / len_sq;
+    t = (t < 0) ? 0 : ((t > 1) ? 1 : t);
+    
+    float closest_x = p1.x + t * dx;
+    float closest_y = p1.y + t * dy;
+    
+    float dpx = px - closest_x;
+    float dpy = py - closest_y;
+    return std::sqrt(dpx * dpx + dpy * dpy);
+}
+
+// Helper function: Check if bounds intersect polygon
+bool Bounds::intersects_polygon(const std::vector<glm::vec2>& polygon) const {
+    if (polygon.size() < 3) return false;
+    
+    // Check if any polygon vertex is inside the bounds
+    for (const auto& vertex : polygon) {
+        if (contains(vertex.x, vertex.y)) {
+            return true;
+        }
+    }
+    
+    // Check if any bounds corner is inside the polygon
+    std::vector<glm::vec2> corners = {
+        {get_min_x(), get_min_y()},
+        {get_max_x(), get_min_y()},
+        {get_max_x(), get_max_y()},
+        {get_min_x(), get_max_y()}
+    };
+    
+    for (const auto& corner : corners) {
+        if (point_in_polygon(corner.x, corner.y, polygon)) {
+            return true;
+        }
+    }
+    
+    // Check if any polygon edge intersects the bounds AABB
+    for (size_t i = 0; i < polygon.size(); ++i) {
+        const glm::vec2& p1 = polygon[i];
+        const glm::vec2& p2 = polygon[(i + 1) % polygon.size()];
+        
+        // Proper line-segment to AABB intersection test
+        float dx = p2.x - p1.x;
+        float dy = p2.y - p1.y;
+        float len_sq = dx * dx + dy * dy;
+        
+        if (len_sq < 1e-10f) continue;  // Degenerate line segment
+        
+        // Find closest point on line segment to AABB center
+        float cx = (get_min_x() + get_max_x()) * 0.5f;
+        float cy = (get_min_y() + get_max_y()) * 0.5f;
+        float t = ((cx - p1.x) * dx + (cy - p1.y) * dy) / len_sq;
+        t = (t < 0) ? 0 : ((t > 1) ? 1 : t);
+        
+        float closest_x = p1.x + t * dx;
+        float closest_y = p1.y + t * dy;
+        
+        // Check if closest point is inside AABB
+        if (closest_x >= get_min_x() && closest_x <= get_max_x() &&
+            closest_y >= get_min_y() && closest_y <= get_max_y()) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+// Helper function: Check if bounds is fully contained by polygon
+bool Bounds::fully_contained_by_polygon(const std::vector<glm::vec2>& polygon) const {
+    if (polygon.size() < 3) return false;
+    
+    // Check if all four corners are inside the polygon
+    std::vector<glm::vec2> corners = {
+        {get_min_x(), get_min_y()},
+        {get_max_x(), get_min_y()},
+        {get_max_x(), get_max_y()},
+        {get_min_x(), get_max_y()}
+    };
+    
+    for (const auto& corner : corners) {
+        if (!point_in_polygon(corner.x, corner.y, polygon)) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+void Quadtree::set_polygon(const std::vector<glm::vec2>& polygon) {
+    QuadtreeNode* root = root_.get();
+    root->set_polygon(polygon);
+}
+
+void QuadtreeNode::set_polygon(const std::vector<glm::vec2>& polygon) {
+    // If the polygon doesn't intersect this node's bounding box, we can move on
+    if (!bounds_.intersects_polygon(polygon)) {
+        return;
+    }
+    
+    // If the bounds of this node are fully contained in the polygon, we can set all its kids to empty and move on
+    if (bounds_.fully_contained_by_polygon(polygon)) {
+        set_all(FillState::Empty);
+        return;
+    }
+    
+    // If we're at max depth, set to empty and move on
+    if (depth_ >= max_depth_) {
+        set_all(FillState::Empty);
+        return;
+    }
+    
+    // We're on the edge of the polygon (intersects but doesn't fully contain), so subdivide for greater polygon resolution
+    if (is_leaf()) {
+        subdivide();
+    }
+    
+    // Recurse to all children, then try to collapse any redundant nodes when back
+    children_[0]->set_polygon(polygon);
+    children_[1]->set_polygon(polygon);
+    children_[2]->set_polygon(polygon);
+    children_[3]->set_polygon(polygon);
+    try_collapse();
+}
+
 void QuadtreeNode::subdivide()
 {
     if (!is_leaf()) return;

@@ -119,7 +119,23 @@ float Bomb::getY() const {
 }
 
 void Bomb::explode() {
-    terrain->set_circle(explodeRadius, x, y); // x and y are world coordinates!
+    if (!explosionPolygon.empty()) {
+        // Transform polygon to world space:
+        // 1. Scale normalized vertices (-1 to 1) by explosion radius
+        // 2. Translate to bomb position
+        std::vector<glm::vec2> worldPolygon = explosionPolygon;
+        for (auto& vertex : worldPolygon) {
+            vertex.x *= explodeRadius;  // Scale from normalized to radius
+            vertex.y *= explodeRadius;
+            vertex.x += x;              // Translate to bomb position
+            vertex.y += y;
+        }
+        terrain->set_polygon(worldPolygon);
+    } else {
+        // Fall back to circular explosion
+        std::cout << "[ERROR] Used circle fallback!"<< std::endl;
+        terrain->set_circle(explodeRadius, x, y); // x and y are world coordinates!
+    }
     active = false;
 }
 
@@ -168,7 +184,6 @@ void Bomb::resolveTerrainCollision() {
             float py = y + sin(angle) * radius;
 
             if (terrain->is_filled(px, py)) {
-                std::cout << "[BOMB] Collision event!" << std::endl;
                 
                 if (!timedExplosion) {
                     hitsToExplode--;

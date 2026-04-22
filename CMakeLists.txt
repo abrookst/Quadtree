@@ -36,6 +36,18 @@ FetchContent_Declare(imgui
     SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/imgui-src"
 )
 
+# --- GLM ---
+# Fetch GLM (header-only library for math)
+FetchContent_Declare(glm
+    URL https://github.com/g-truc/glm/releases/download/0.9.9.8/glm-0.9.9.8.zip
+    SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/glm-src"
+)
+# GLM is header-only, so we don't call MakeAvailable
+FetchContent_GetProperties(glm)
+if(NOT glm_POPULATED)
+    FetchContent_Populate(glm)
+endif()
+
 if(SDL2_FETCHED_SOURCE)
     FetchContent_MakeAvailable(SDL2 imgui)
 else()
@@ -149,6 +161,7 @@ target_include_directories(quadtree PRIVATE
     ${imgui_SOURCE_DIR}
     ${imgui_SOURCE_DIR}/backends
     ${SDL2_INCLUDE_DIRS}
+    ${glm_SOURCE_DIR}
 )
 
 # Platform-specific settings

@@ -12,6 +12,7 @@
 #include "appcontext.h"
 
 struct ImVec4;
+#include <glm/glm.hpp>
 
 // Forward declaration
 class Quadtree;
@@ -68,6 +69,15 @@ float gui_get_bomb_explode_time();
 float gui_get_bomb_explode_radius();
 bool gui_get_bomb_timed_explosion();
 int gui_get_bomb_hits_to_explode();
+
+// Explosion polygon settings
+enum class ExplosionType
+{
+    Circle,
+    Polygon
+};
+ExplosionType gui_get_explosion_type();
+std::vector<glm::vec2> gui_get_explosion_polygon();
 
 // Spawn character mode
 bool gui_get_spawn_character_mode();

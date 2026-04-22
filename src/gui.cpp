@@ -211,6 +211,15 @@ int gui_get_terrain_display_height()
     static ImVec4 bomb_trail_color = ImVec4(0.78f, 0.78f, 0.78f, 0.59f); // approx 200, 200, 200, 150
     static ImVec4 parabola_color = ImVec4(1.0f, 1.0f, 0.0f, 0.78f); // YELLOW / approx 255, 255, 0, 200
 
+    // Explosion polygon settings (vertices stored as normalized -1 to 1)
+    static ExplosionType explosion_type = ExplosionType::Circle;
+    static std::vector<glm::vec2> explosion_polygon;
+    static std::vector<glm::vec2> polygon_editing_points;
+    static float vertex_input_x = 0.0f;
+    static float vertex_input_y = 0.0f;
+    static float canvas_pan_x = 0.0f;
+    static float canvas_pan_y = 0.0f;
+
 float gui_get_bomb_radius() { return bomb_radius; }
 float gui_get_bomb_gravity() { return bomb_gravity; }
 float gui_get_bomb_bounce() { return bomb_bounce; }
@@ -220,6 +229,9 @@ bool gui_get_bomb_timed_explosion() { return bomb_timed_explosion; }
 int gui_get_bomb_hits_to_explode() { return bomb_hits_to_explode; }
 ImVec4 gui_get_bomb_trail_color() { return bomb_trail_color; }
 ImVec4 gui_get_parabola_color() { return parabola_color; }
+
+ExplosionType gui_get_explosion_type() { return explosion_type; }
+std::vector<glm::vec2> gui_get_explosion_polygon() { return explosion_polygon; }
 
 static bool g_spawn_character_mode = false;
 bool gui_get_spawn_character_mode() { return g_spawn_character_mode; }
@@ -336,6 +348,21 @@ void gui_render(AppContext& app)
         
         ImGui::Separator();
         
+        // Explosion type selector
+        ImGui::Text("Explosion Type:");
+        bool is_circle = (explosion_type == ExplosionType::Circle);
+        bool is_polygon = (explosion_type == ExplosionType::Polygon);
+        
+        if (ImGui::RadioButton("Circle Explosion", is_circle)) {
+            explosion_type = ExplosionType::Circle;
+        }
+        ImGui::SameLine();
+        if (ImGui::RadioButton("Polygon Explosion", is_polygon)) {
+            explosion_type = ExplosionType::Polygon;
+        }
+        
+        ImGui::Separator();
+        
         bool timed = bomb_timed_explosion;
         if (ImGui::RadioButton("Hits to Explode", !timed)) bomb_timed_explosion = false;
         ImGui::SameLine();
@@ -364,6 +391,320 @@ void gui_render(AppContext& app)
         ImGui::Spacing();
     }
 
+    if (ImGui::CollapsingHeader("Polygon Editor", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Text("Create custom explosion polygons:");
+        
+        // Display current polygon vertices
+        if (!explosion_polygon.empty()) {
+            ImGui::TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), "Active Polygon: %zu vertices", explosion_polygon.size());
+        } else if (!polygon_editing_points.empty()) {
+            ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "Editing: %zu vertices", polygon_editing_points.size());
+        } else {
+            ImGui::TextDisabled("No polygon created yet");
+        }
+        
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        
+        // Canvas for polygon visualization
+        ImVec2 canvas_size(300, 300);
+        ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        
+        // Draw canvas background
+        draw_list->AddRectFilled(canvas_pos, ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y), IM_COL32(50, 50, 50, 255));
+        draw_list->AddRect(canvas_pos, ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y), IM_COL32(200, 200, 200, 255));
+        
+        // Check for mouse interaction in canvas
+        ImVec2 mouse_pos = ImGui::GetMousePos();
+        bool is_mouse_over_canvas = (mouse_pos.x >= canvas_pos.x && mouse_pos.x <= canvas_pos.x + canvas_size.x &&
+                                     mouse_pos.y >= canvas_pos.y && mouse_pos.y <= canvas_pos.y + canvas_size.y);
+        
+        // Handle canvas panning with middle mouse
+        if (is_mouse_over_canvas && ImGui::IsMouseDown(ImGuiMouseButton_Middle)) {
+            ImVec2 delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Middle);
+            canvas_pan_x += delta.x / 100.0f;
+            canvas_pan_y += delta.y / 100.0f;
+            ImGui::ResetMouseDragDelta(ImGuiMouseButton_Middle);
+        }
+        
+        // Draw center crosshair
+        ImVec2 canvas_center(canvas_pos.x + canvas_size.x / 2, canvas_pos.y + canvas_size.y / 2);
+        float crosshair_size = 10.0f;
+        draw_list->AddLine(ImVec2(canvas_center.x - crosshair_size, canvas_center.y), ImVec2(canvas_center.x + crosshair_size, canvas_center.y), IM_COL32(100, 100, 100, 128));
+        draw_list->AddLine(ImVec2(canvas_center.x, canvas_center.y - crosshair_size), ImVec2(canvas_center.x, canvas_center.y + crosshair_size), IM_COL32(100, 100, 100, 128));
+        
+        // Grid lines (from -1 to 1 range, 0.5 step)
+        float scale = canvas_size.x / 2.0f;  // Maps -1 to 1 to canvas width
+        for (float x = -1.0f; x <= 1.0f; x += 0.5f) {
+            float screen_x = canvas_center.x + x * scale + canvas_pan_x;
+            draw_list->AddLine(ImVec2(screen_x, canvas_pos.y), ImVec2(screen_x, canvas_pos.y + canvas_size.y), 
+                              (fabsf(x) < 0.01f ? IM_COL32(100, 100, 100, 128) : IM_COL32(80, 80, 80, 64)));
+        }
+        for (float y = -1.0f; y <= 1.0f; y += 0.5f) {
+            float screen_y = canvas_center.y - y * scale + canvas_pan_y;
+            draw_list->AddLine(ImVec2(canvas_pos.x, screen_y), ImVec2(canvas_pos.x + canvas_size.x, screen_y), 
+                              (fabsf(y) < 0.01f ? IM_COL32(100, 100, 100, 128) : IM_COL32(80, 80, 80, 64)));
+        }
+        
+        // Lambda to convert normalized coords to canvas coordinates
+        auto norm_to_canvas = [&](float nx, float ny) -> ImVec2 {
+            return ImVec2(
+                canvas_center.x + nx * scale + canvas_pan_x,
+                canvas_center.y - ny * scale + canvas_pan_y  // Invert Y for screen coordinates
+            );
+        };
+        
+        // Get explosion radius for preview scaling
+        float explosion_radius = gui_get_bomb_explode_radius();
+        
+        // Draw editing polygon being built
+        if (polygon_editing_points.size() >= 2) {
+            for (size_t i = 0; i < polygon_editing_points.size(); ++i) {
+                ImVec2 p1 = norm_to_canvas(polygon_editing_points[i].x, polygon_editing_points[i].y);
+                ImVec2 p2 = norm_to_canvas(polygon_editing_points[(i + 1) % polygon_editing_points.size()].x, polygon_editing_points[(i + 1) % polygon_editing_points.size()].y);
+                draw_list->AddLine(p1, p2, IM_COL32(0, 255, 0, 200), 2.0f);
+            }
+        }
+        
+        // Draw editing vertices as circles
+        for (size_t i = 0; i < polygon_editing_points.size(); ++i) {
+            ImVec2 p = norm_to_canvas(polygon_editing_points[i].x, polygon_editing_points[i].y);
+            draw_list->AddCircleFilled(p, 5.0f, IM_COL32(0, 255, 0, 255));
+            draw_list->AddCircle(p, 5.0f, IM_COL32(255, 255, 0, 255), 12, 2.0f);
+        }
+        
+        // Draw saved polygon (if no editing)
+        if (polygon_editing_points.empty() && !explosion_polygon.empty()) {
+            if (explosion_polygon.size() >= 2) {
+                for (size_t i = 0; i < explosion_polygon.size(); ++i) {
+                    ImVec2 p1 = norm_to_canvas(explosion_polygon[i].x, explosion_polygon[i].y);
+                    ImVec2 p2 = norm_to_canvas(explosion_polygon[(i + 1) % explosion_polygon.size()].x, explosion_polygon[(i + 1) % explosion_polygon.size()].y);
+                    draw_list->AddLine(p1, p2, IM_COL32(0, 150, 255, 200), 2.0f);
+                }
+            }
+            
+            for (size_t i = 0; i < explosion_polygon.size(); ++i) {
+                ImVec2 p = norm_to_canvas(explosion_polygon[i].x, explosion_polygon[i].y);
+                draw_list->AddCircleFilled(p, 5.0f, IM_COL32(0, 150, 255, 255));
+                draw_list->AddCircle(p, 5.0f, IM_COL32(150, 255, 255, 255), 12, 2.0f);
+            }
+        }
+        
+        ImGui::Dummy(canvas_size);
+        ImGui::Spacing();
+        
+        // Vertex input controls (normalized -1 to 1)
+        ImGui::PushItemWidth(100);
+        ImGui::SliderFloat("Vertex X##poly", &vertex_input_x, -1.0f, 1.0f);
+        ImGui::SliderFloat("Vertex Y##poly", &vertex_input_y, -1.0f, 1.0f);
+        ImGui::PopItemWidth();
+        
+        if (ImGui::Button("Add Vertex", ImVec2(100, 0))) {
+            polygon_editing_points.push_back({vertex_input_x, vertex_input_y});
+            std::cout << "[POLYGON] Added vertex: (" << vertex_input_x << ", " << vertex_input_y << ")" << std::endl;
+        }
+        
+        ImGui::Spacing();
+        
+        // Display and manage editing vertices
+        if (!polygon_editing_points.empty()) {
+            ImGui::Text("Editing Vertices:");
+            std::vector<int> to_remove;
+            for (size_t i = 0; i < polygon_editing_points.size(); ++i) {
+                ImGui::BulletText("[%zu] X: %.2f, Y: %.2f", i, polygon_editing_points[i].x, polygon_editing_points[i].y);
+                ImGui::SameLine();
+                ImGui::PushID((int)i);
+                if (ImGui::SmallButton("X")) {
+                    to_remove.push_back(i);
+                }
+                ImGui::PopID();
+            }
+            // Remove marked vertices in reverse order
+            for (int i = (int)to_remove.size() - 1; i >= 0; --i) {
+                polygon_editing_points.erase(polygon_editing_points.begin() + to_remove[i]);
+            }
+            ImGui::Spacing();
+        }
+        
+        ImGui::Separator();
+        ImGui::Spacing();
+        
+        // Preset polygons
+        ImGui::Text("Preset Shapes:");
+        ImGui::Spacing();
+        
+        if (ImGui::Button("Diamond##preset", ImVec2(70, 0))) {
+            explosion_polygon = {
+                {0.0f, 1.0f},      // top
+                {1.0f, 0.0f},      // right
+                {0.0f, -1.0f},     // bottom
+                {-1.0f, 0.0f}      // left
+            };
+            polygon_editing_points.clear();
+            ImGui::OpenPopup("PresetLoaded_Diamond");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Square##preset", ImVec2(70, 0))) {
+            float r = 0.707f;  // sqrt(2)/2 for normalized square
+            explosion_polygon = {
+                {r, r},      // top-right
+                {r, -r},     // bottom-right
+                {-r, -r},    // bottom-left
+                {-r, r}      // top-left
+            };
+            polygon_editing_points.clear();
+            ImGui::OpenPopup("PresetLoaded_Square");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Triangle##preset", ImVec2(70, 0))) {
+            explosion_polygon = {
+                {0.0f, 1.0f},      // top
+                {0.866f, -0.5f},   // bottom-right (cos(60°), -sin(60°))
+                {-0.866f, -0.5f}   // bottom-left
+            };
+            polygon_editing_points.clear();
+            ImGui::OpenPopup("PresetLoaded_Triangle");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Star##preset", ImVec2(70, 0))) {
+            float outer = 1.0f;
+            float inner = 0.4f;
+            float angle_step = 3.14159265f / 5.0f;
+            explosion_polygon.clear();
+            for (int i = 0; i < 10; ++i) {
+                float angle = i * angle_step - 1.5708f;
+                float radius = (i % 2 == 0) ? outer : inner;
+                explosion_polygon.push_back({
+                    radius * cosf(angle),
+                    radius * sinf(angle)
+                });
+            }
+            polygon_editing_points.clear();
+            ImGui::OpenPopup("PresetLoaded_Star");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Hexagon##preset", ImVec2(70, 0))) {
+            explosion_polygon.clear();
+            for (int i = 0; i < 6; ++i) {
+                float angle = (i * 3.14159265f / 3.0f) - 1.5708f;
+                explosion_polygon.push_back({
+                    cosf(angle),
+                    sinf(angle)
+                });
+            }
+            polygon_editing_points.clear();
+            ImGui::OpenPopup("PresetLoaded_Hexagon");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Pentagon##preset", ImVec2(70, 0))) {
+            explosion_polygon.clear();
+            for (int i = 0; i < 5; ++i) {
+                float angle = (i * 2.0f * 3.14159265f / 5.0f) - 1.5708f;
+                explosion_polygon.push_back({
+                    cosf(angle),
+                    sinf(angle)
+                });
+            }
+            polygon_editing_points.clear();
+            ImGui::OpenPopup("PresetLoaded_Pentagon");
+        }
+        
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        
+        // Finish editing button
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+        if (ImGui::Button("Save & Use Custom Polygon", ImVec2(-1, 0))) {
+            if (polygon_editing_points.size() >= 3) {
+                explosion_polygon = polygon_editing_points;
+                polygon_editing_points.clear();
+                ImGui::OpenPopup("PolygonSaved");
+            } else {
+                ImGui::OpenPopup("InvalidPolygon");
+            }
+        }
+        ImGui::PopStyleColor();
+        
+        // Popups
+        if (ImGui::BeginPopupModal("PolygonSaved", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Polygon saved with %zu vertices!", explosion_polygon.size());
+            if (ImGui::Button("OK##saved", ImVec2(120, 0))) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        
+        if (ImGui::BeginPopupModal("InvalidPolygon", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Polygon must have at least 3 vertices!");
+            if (ImGui::Button("OK##invalid", ImVec2(120, 0))) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        
+        // Preset loaded popups
+        if (ImGui::BeginPopupModal("PresetLoaded_Diamond", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Diamond preset loaded!");
+            if (ImGui::Button("OK##diamond", ImVec2(120, 0))) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        
+        if (ImGui::BeginPopupModal("PresetLoaded_Square", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Square preset loaded!");
+            if (ImGui::Button("OK##square", ImVec2(120, 0))) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        
+        if (ImGui::BeginPopupModal("PresetLoaded_Triangle", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Triangle preset loaded!");
+            if (ImGui::Button("OK##triangle", ImVec2(120, 0))) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        
+        if (ImGui::BeginPopupModal("PresetLoaded_Star", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Star preset loaded!");
+            if (ImGui::Button("OK##star", ImVec2(120, 0))) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        
+        if (ImGui::BeginPopupModal("PresetLoaded_Hexagon", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Hexagon preset loaded!");
+            if (ImGui::Button("OK##hexagon", ImVec2(120, 0))) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        
+        if (ImGui::BeginPopupModal("PresetLoaded_Pentagon", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Pentagon preset loaded!");
+            if (ImGui::Button("OK##pentagon", ImVec2(120, 0))) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        
+        if (ImGui::Button("Clear All", ImVec2(-1, 0))) {
+            explosion_polygon.clear();
+            polygon_editing_points.clear();
+            vertex_input_x = 0.0f;
+            vertex_input_y = 0.0f;
+        }
+        
+        ImGui::Spacing();
+    }
+
     if (ImGui::CollapsingHeader("Terrain", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::PushItemWidth(150);
@@ -389,8 +730,6 @@ void gui_render(AppContext& app)
         }
         ImGui::PopStyleColor(2);
         
-        ImGui::Spacing();
-        ImGui::TextDisabled("Display Resolution: %dx%d (locked to bitmap size)", g_terrain_display_width, g_terrain_display_height);
         ImGui::Spacing();
     }
 
@@ -676,8 +1015,6 @@ void gui_render(AppContext& app)
             // Draw active bombs using mapped screen coordinates
             for (auto& bomb : app.bombs) {
                 if (bomb.isActive()) {
-                    // We also update them here for convenience, though later this should be in the main physics loop
-                    bomb.update(1.0f / 60.0f);
                     ImVec2 screen_pos = world_to_screen(bomb.getX(), bomb.getY());
                     
                     // Note: bomb.radius in world coords. In screen coords it scales by (canvas_width / range_x)
@@ -712,9 +1049,8 @@ void gui_render(AppContext& app)
                 }
             }
 
-            // Update and draw player
+            // Draw player
             if (app.player && app.player->isActive()) {
-                app.player->update(1.0f / 60.0f);
                 ImVec2 screen_pos = world_to_screen(app.player->getX(), app.player->getY());
                 float zoom_x = canvas_width / range_x;
                 app.player->draw(draw_list, screen_pos, zoom_x);
@@ -754,7 +1090,6 @@ void gui_render(AppContext& app)
                 }
             }
             
-            ImGui::SameLine();
             ImGui::SetNextItemWidth(100);
             if (ImGui::InputInt("Height##res", &bmp_height, 1, 10))
             {
@@ -781,7 +1116,6 @@ void gui_render(AppContext& app)
             const char* mode_items[] = { "Draw Solid", "Draw Air" };
             ImGui::SetNextItemWidth(150);
             ImGui::Combo("##draw_mode", &draw_mode, mode_items, IM_ARRAYSIZE(mode_items));
-            ImGui::SameLine();
             ImGui::SetNextItemWidth(150);
             ImGui::SliderFloat("Brush Radius##draw", &brush_radius_draw, 1.0f, 50.0f, "%.1f");
             ImGui::Spacing();

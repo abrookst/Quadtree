@@ -6,6 +6,7 @@
 #include <sstream>
 #include <vector>
 #include <filesystem>
+#include <algorithm>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -184,6 +185,14 @@ void spawnBomb(float x, float y, AppContext& app, float vx = 0.0f, float vy = 0.
     b.setBounceStrength(gui_get_bomb_bounce());
     b.setExplodeRadius(gui_get_bomb_explode_radius());
     
+    // Set explosion polygon if polygon mode is enabled
+    if (gui_get_explosion_type() == ExplosionType::Polygon) {
+        auto polygon = gui_get_explosion_polygon();
+        if (!polygon.empty()) {
+            b.setExplosionPolygon(polygon);
+        }
+    }
+    
     app.bombs.push_back(b);
 }
 
@@ -316,10 +325,18 @@ void app_run(AppContext& app)
 {
     bool running = true;
     SDL_Event event;
+    Uint32 last_frame_time = SDL_GetTicks();
 
     // Main loop
     while (running)
     {
+        // Calculate delta time
+        Uint32 current_frame_time = SDL_GetTicks();
+        float dt = (current_frame_time - last_frame_time) / 1000.0f;  // Convert to seconds
+        last_frame_time = current_frame_time;
+        
+        // Cap delta time to prevent spiral of death (max 1/30th of a second)
+        if (dt > 1.0f / 30.0f) dt = 1.0f / 30.0f;
         // Read in keys
         while (SDL_PollEvent(&event))
         {
@@ -599,6 +616,22 @@ void app_run(AppContext& app)
             app.world_min_y = b.get_min_y();
             app.world_max_y = b.get_max_y();
         }
+
+        // Physics updates with actual delta time
+        if (app.player && app.player->isActive()) {
+            app.player->update(dt);
+        }
+        for (auto& bomb : app.bombs) {
+            if (bomb.isActive()) {
+                bomb.update(dt);
+            }
+        }
+        // Remove inactive bombs
+        app.bombs.erase(
+            std::remove_if(app.bombs.begin(), app.bombs.end(),
+                [](const Bomb& b) { return !b.isActive(); }),
+            app.bombs.end()
+        );
 
         // Rendering
         ImGui::Render();

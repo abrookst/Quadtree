@@ -4,6 +4,7 @@
 #include "quadtree.h"
 #include <vector>
 #include <utility>
+#include <glm/glm.hpp>
 
 
 struct AppContext;
@@ -39,6 +40,9 @@ public:
 
     // Explode Bomb
     void explode();
+
+    // Set explosion polygon (optional, uses circle if not set)
+    void setExplosionPolygon(const std::vector<glm::vec2>& polygon) { explosionPolygon = polygon; }
 
     // Check if it exists in the level
     bool isActive() const;
@@ -98,5 +102,8 @@ private:
 
     // active state
     bool active;
+
+    // Explosion polygon (world space vertices)
+    std::vector<glm::vec2> explosionPolygon;
 
 };
